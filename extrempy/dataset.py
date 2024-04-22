@@ -1,4 +1,4 @@
-from constant import *
+from extrempy.constant import *
 
 class SetSys():
 

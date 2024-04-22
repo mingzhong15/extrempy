@@ -1,5 +1,5 @@
-from constant import *
-from dataset import SetSys
+from extrempy.constant import *
+from extrempy.dataset import SetSys
 
 class TestSys():
     
