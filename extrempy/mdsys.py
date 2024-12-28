@@ -18,7 +18,7 @@ class MDSys():
         self.numb_atoms = np.loadtxt(dump_list[0],skiprows=9)[:,0].shape[0]
         
         self.type_list = np.unique(np.loadtxt(dump_list[0],skiprows=9)[:,1])
-        self.numb_elements = len(self.type_list)
+        self.numb_types = len(self.type_list)
         
         keys = np.array(pd.read_csv(dump_list[0]).values[7][0].split()[2:])
 
@@ -43,10 +43,10 @@ class MDSys():
             print('%.d dump files in total'%self.numb_frames)
             print('%.d atoms in single frame'%self.numb_atoms )
     
-            print('%.d types of atom in the frame'%self.numb_elements)
+            print('%.d types of atom in the frame'%self.numb_types)
     
     # -------------------------------------- #
-    # 
+    # read dump file
     # -------------------------------------- #
     def _read_dump(self, idx):
         
