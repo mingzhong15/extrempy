@@ -1,15 +1,38 @@
 from extrempy.constant import *
 import pandas as pd
 
+import re
+
+def read_and_sort_files(directory, pattern='dump.*'):
+    # 使用glob.glob读取文件列表
+    file_list = glob.glob(os.path.join(directory, pattern))
+    
+    # 提取文件名中的数字并排序
+    file_list.sort(key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+    
+    return file_list
+
+def calculate_dump_freq(file_list):
+    # 提取文件名中的数字
+    numbers = [int(re.findall(r'\d+', os.path.basename(f))[0]) for f in file_list]
+    
+    # 计算相邻数字的差值
+    intervals = [j - i for i, j in zip(numbers[:-1], numbers[1:])]
+    
+    # 返回最小间隔
+    return min(intervals)
+
 class MDSys():
     
-    def __init__(self, root_dir, traj_dir='traj', is_printf=True):
+    def __init__(self, root_dir, dt = 1.0, traj_dir='traj', is_printf=True):
     
         self.root = root_dir
         self.traj_dir = os.path.join(self.root, traj_dir)
-        
-        dump_list = glob.glob( os.path.join( self.traj_dir, 'dump.*') )
-        dump_list.sort()
+
+        dump_list = read_and_sort_files( self.traj_dir, pattern='dump.*')
+        self.dump_freq = calculate_dump_freq(dump_list)
+
+        self.dt = dt
         
         # =============================== 
         # read basic parameter
