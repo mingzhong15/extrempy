@@ -129,8 +129,8 @@ class SEDCalc(MDSys):
                 tmp[:,1] += ckw[:,1]
 
             if is_save:
-                np.savetxt( os.path.join(save_dir, 'ckw_'+labels[jdx]+'_%.dk_'%(nk)+suffix+'.txt'), ckw)
+                np.savetxt( os.path.join(save_dir, 'ckw_'+labels[jdx]+'_%.dk_'%(nk)+suffix+'.txt'), ckw, header='component-'+labels[jdx]+' nk=%.d frequency (1/fs) spectrum (arb. unit.)'%nk, comments='# ')
 
         if is_save:
-            np.savetxt( os.path.join(save_dir, 'ckw_tot_%.dk_'%(nk)+suffix+'.txt'), tmp)
+            np.savetxt( os.path.join(save_dir, 'ckw_tot_%.dk_'%(nk)+suffix+'.txt'), tmp, header='nk=%.d frequency (1/fs) spectrum (arb. unit.)'%nk, comments='# ')
     

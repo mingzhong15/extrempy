@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
 	name='extrempy',
-	version='0.1',
+	version='0.2.0',
 	description='post-processing library for atomistic modeling',
 	url='https://github.com/mingzhong15/extrempy/',
 	author='Mingzhong',
