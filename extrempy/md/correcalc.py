@@ -3,10 +3,27 @@ from extrempy.md.base import MDSys
 
 class TimeCorrelationCalc(MDSys):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, time_corre_max=0, **kwargs):
+        """
+        Initialize the TimeCorrelationCalc object.
+
+        Parameters:
+        -----------
+        *args : tuple
+            Additional positional arguments to pass to the MDSys initializer.
+        time_corre_max : int, optional
+            Maximum time for correlation calculation. Default is 0.  (unit : the same as self.dt)
+        **kwargs : dict
+            Additional keyword arguments to pass to the MDSys initializer.
+        """
+        
         super().__init__(*args, **kwargs)
 
-        self.time_corre_max = int(self.numb_frames / 2)
+        if time_corre_max == 0:
+            self.time_corre_max = int(self.numb_frames / 2)
+        else:
+            self.time_corre_max = int(time_corre_max / self.dt / self.dump_freq)
+
         self.time = np.arange(self.time_corre_max) * self.dump_freq * self.dt
 
         strgs = '# ================================= # \n'
