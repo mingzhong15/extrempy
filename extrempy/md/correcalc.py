@@ -14,7 +14,7 @@ class TimeCorrelationCalc(MDSys):
         strgs += '# ================================= # \n'
         print(strgs)
 
-    def _calc_correlation(self, quantity_func, skip=0, interval=0, normalize=True):
+    def _calc_autocorrelation(self, quantity_func, skip=0, interval=0, normalize=True):
         """
         Calculate the time correlation function for a given quantity.
 
@@ -82,7 +82,7 @@ class TimeCorrelationCalc(MDSys):
         def velocity_func():
             return np.array(self.velocity)
 
-        vacf = self._calc_correlation(velocity_func, skip, interval, normalize=True)
+        vacf = self._calc_autocorrelation(velocity_func, skip, interval, normalize=True)
         return vacf
 
     def calc_pacf(self, skip=0, interval=0):
@@ -104,7 +104,29 @@ class TimeCorrelationCalc(MDSys):
         def position_func():
             return np.array(self.position)
 
-        pacf = self._calc_correlation(position_func, skip, interval, normalize=True)
+        pacf = self._calc_autocorrelation(position_func, skip, interval, normalize=True)
         return pacf
 
     # Add more correlation functions as needed...
+
+    def calc_power_spectrum(self, func_correlation):
+        """
+        Perform Fourier transform on the given correlation function.
+
+        Parameters:
+        -----------
+        func_correlation : np.ndarray
+            The correlation function to be Fourier transformed.
+
+        Returns:
+        --------
+        freq : np.ndarray
+            The frequency components corresponding to the Fourier transform.
+        spectra : np.ndarray
+            The magnitude of the Fourier transformed correlation function.
+        """
+        freq = np.fft.fftfreq(self.time.shape[0], d=self.dt*self.dump_freq) 
+
+        spectra = np.abs(np.fft.fft(func_correlation))
+
+        return freq, spectra
