@@ -3,9 +3,9 @@ import pandas as pd
 
 import re
 
-def read_and_sort_files(directory, pattern='dump.*'):
+def read_and_sort_files(directory, format='dump.*'):
     # 使用glob.glob读取文件列表
-    file_list = glob.glob(os.path.join(directory, pattern))
+    file_list = glob.glob(os.path.join(directory, format))
     
     # 提取文件名中的数字并排序
     file_list.sort(key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
@@ -24,12 +24,13 @@ def calculate_dump_freq(file_list):
 
 class MDSys():
     
-    def __init__(self, root_dir, dt = 1.0, traj_dir='traj', is_printf=True):
+    def __init__(self, root_dir, dt = 1.0, traj_dir='traj', format='dump.*', is_printf=True):
     
         self.root = root_dir
         self.traj_dir = os.path.join(self.root, traj_dir)
+        self.format = format
 
-        dump_list = read_and_sort_files( self.traj_dir, pattern='dump.*')
+        dump_list = read_and_sort_files( self.traj_dir, self.format)
         self.dump_freq = calculate_dump_freq(dump_list)
 
         self.dt = dt
@@ -73,7 +74,11 @@ class MDSys():
     # -------------------------------------- #
     def _read_dump(self, idx):
         
-        tmp = np.loadtxt( os.path.join( self.traj_dir, 'dump.%.d'%idx), skiprows=9)
+        try:
+            tmp = np.loadtxt( os.path.join( self.traj_dir, 'dump.%.d'%idx), skiprows=9)
+        except:
+            tmp = np.loadtxt( os.path.join( self.traj_dir, '%.d.dump'%idx), skiprows=9)
+
 
         self.type = tmp[:,self.type_idx]        
 

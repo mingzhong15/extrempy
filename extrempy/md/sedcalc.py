@@ -1,7 +1,3 @@
-# N_toal -> numb_frames
-# N_atom -> numb_atoms
-# N_type -> numb_element
-
 from extrempy.constant import *
 from extrempy.md.base import MDSys
 
