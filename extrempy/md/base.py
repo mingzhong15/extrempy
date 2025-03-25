@@ -20,7 +20,7 @@ def calculate_dump_freq(file_list):
     intervals = [j - i for i, j in zip(numbers[:-1], numbers[1:])]
     
     # 返回最小间隔
-    return min(intervals)
+    return min(numbers), min(intervals)
 
 class MDSys():
     
@@ -31,7 +31,7 @@ class MDSys():
         self.format = format
 
         dump_list = read_and_sort_files( self.traj_dir, self.format)
-        self.dump_freq = calculate_dump_freq(dump_list)
+        self.init_idx, self.dump_freq  = calculate_dump_freq(dump_list)
 
         self.dt = dt
         
@@ -48,8 +48,11 @@ class MDSys():
 
         if 'type' in keys:
             self.type_idx = np.where(keys=='type')[0][0]
-            
-        if 'xu' in keys:
+        
+        if 'x' in keys:
+            self.x_idx = np.where(keys=='x')[0][0]
+            print('----x, y, z contained----')
+        elif 'xu' in keys:
             self.x_idx = np.where(keys=='xu')[0][0]
             print('----xu, yu, zu contained----')
             
@@ -72,7 +75,7 @@ class MDSys():
     # -------------------------------------- #
     # read dump file
     # -------------------------------------- #
-    def _read_dump(self, idx):
+    def _read_dump(self, idx, cri=None):
         
         try:
             tmp = np.loadtxt( os.path.join( self.traj_dir, 'dump.%.d'%idx), skiprows=9)
@@ -91,4 +94,9 @@ class MDSys():
             self.velocity = tmp[:,self.vx_idx:self.vx_idx+3]
         except:
             pass
-        
+
+        if cri is not None:
+            self.position = self.position[cri]
+            self.type = self.type[cri]
+            self.velocity = self.velocity[cri]
+    
