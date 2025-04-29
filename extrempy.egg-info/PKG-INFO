@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: extrempy
+Version: 0.2.0
+Summary: post-processing library for atomistic modeling
+Home-page: https://github.com/mingzhong15/extrempy/
+Author: Mingzhong
+Author-email: zengqiyu15@163.com
+License: LGPL
+License-File: LICENSE

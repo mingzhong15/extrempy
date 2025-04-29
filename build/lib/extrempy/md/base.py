@@ -713,4 +713,113 @@ if __name__ == "__main__":
         suffix="GX",
         plot=True
     )
-    
+    # # print(sys[-1])
+    # K0 = np.array([0, 0, 0])
+    # K1 = np.array([1, 0, 0])
+    # k_vector = K1 - K0
+    # unit_k_vec = k_vector / np.linalg.norm(k_vector)
+
+    # for i in range(21):
+    #     sys._calc_sed_from_traj(
+    #         save_dir=OUT_DIR,
+    #         k_vec_tmp=k_vector,
+    #         nk=i,
+    #         suffix="GX"
+    #     )
+
+    # def _plot_sed_1d(OUT_DIR, nk, k_value, suffix='GX'):
+    #     data_file = os.path.join(OUT_DIR, f'ckw_tot_{nk}k_{suffix}.txt')
+    #     if not os.path.exists(data_file):
+    #         raise FileNotFoundError(f"Data file not found: {data_file}")
+
+    #     data = np.loadtxt(data_file)
+
+    #     ax.plot(data[:, 0], data[:, 1], '-o', ms=2,
+    #             label=r'$k=%.2f\ \rm{\mathring A^{-1}}$' % k_value)
+
+    #     return data
+
+    # def _generate_sed_2d(OUT_DIR, ss, suffix):
+    #     """Generate 2D SED data from 1D data files.
+
+    #     Args:
+    #         OUT_DIR (str): Output directory
+    #         ss (MDSys): MDSys instance containing system information
+    #         suffix (str): File suffix for identification
+    #     """
+    #     if not os.path.exists(OUT_DIR):
+    #         raise FileNotFoundError(f"Output directory not found: {OUT_DIR}")
+
+    #     k_list = []
+    #     data_list = []  # 存储所有的数据
+    #     freq = None     # 存储频率数据
+
+    #     for nk in range(1, 21):
+    #         try:
+    #             k_value = np.linalg.norm(ss.delta_k * unit_k_vec * nk)
+    #             print(f"Processing nk={nk}, k_value={k_value}")
+
+    #             data = _plot_sed_1d(OUT_DIR, nk, k_value, suffix)
+    #             print(f"Data shape: {data.shape}")
+
+    #             if freq is None:
+    #                 freq = data[:, 0]  # 保存频率数据
+
+    #             k_list.append(k_value)
+    #             data_list.append(data[:, 1])  # 只保存SED值
+    #         except Exception as e:
+    #             print(f"Error processing nk={nk}: {str(e)}")
+    #             continue
+
+    #     if not data_list:
+    #         raise ValueError(
+    #             "No data was collected. Check if the SED calculation generated output files.")
+
+    #     # 转换为numpy数组
+    #     k_list = np.array(k_list)
+    #     data_array = np.column_stack(data_list)  # 将所有SED数据组合成矩阵
+
+    #     print(
+    #         f"Final data shapes - k_list: {k_list.shape}, data_array: {data_array.shape}")
+
+    #     # 创建网格
+    #     K, Omega = np.meshgrid(k_list, freq)
+
+    #     # 保存数据
+    #     np.savetxt(os.path.join(OUT_DIR, 'sed_2d_'+suffix+'.dat'), data_array)
+    #     np.savetxt(os.path.join(OUT_DIR, 'knum_2d_'+suffix+'.dat'), K)
+    #     np.savetxt(os.path.join(OUT_DIR, 'freq_2d_'+suffix+'.dat'), Omega)
+
+    # def _plot_sed_2d(OUT_DIR, suffix):
+
+    #     Z = np.loadtxt(os.path.join(OUT_DIR, 'sed_2d_'+suffix+'.dat'))
+    #     K = np.loadtxt(os.path.join(OUT_DIR, 'knum_2d_'+suffix+'.dat'))
+    #     Omega = np.loadtxt(os.path.join(OUT_DIR, 'freq_2d_'+suffix+'.dat'))
+
+    #     fig, ax = plt.subplots(figsize=(2, 2), dpi=200)
+
+    #     ax.contourf(K, Omega, Z, levels=100, cmap='Blues')
+
+    #     ax.set_ylim(0, )
+    #     ax.set_xlim(0, )
+
+    #     ax.set_xlabel(r'$k$ ($\rm{\mathring A^{-1}}$)')
+    #     ax.set_ylabel(r'$\omega$ ($\rm{fs^{-1}}$)')
+
+    #     return ax
+
+    # # # plot the SED for a given wavevector
+    # suffix = 'GX'
+
+    # fig, ax = plt.subplots(figsize=(6, 4), dpi=200)
+
+    # kmax = 2 * np.pi / (sys.cells[0, 0]/15)
+
+    # _generate_sed_2d(OUT_DIR, sys,  suffix)
+    # ax = _plot_sed_2d(OUT_DIR,  suffix)
+
+    # ax.set_xlim(0, kmax)
+
+    # # ax.legend(fontsize=6)
+    # plt.tight_layout()
+    # plt.show()
