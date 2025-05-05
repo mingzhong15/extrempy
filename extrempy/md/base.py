@@ -1,10 +1,8 @@
 import re
 from tqdm import tqdm
 
-import pandas as pd
 import polars as pl
 import numpy as np
-
 
 try:
     from extrempy.constant import *
@@ -523,7 +521,7 @@ class MDSys(list):
         return min(intervals)
 
     def _calc_sed_from_traj(self, save_dir: str, k_vec_tmp: np.ndarray, nk: int = 1,
-                            SKIP: int = 0, INTERVAL: int = 1, suffix: str = None, plot: bool = True) -> np.ndarray:
+                            SKIP: int = 0, INTERVAL: int = 1, suffix: str = None, plot: bool = True, loglocator: bool = True) -> np.ndarray:
         """Calculate spectral energy density (SED) from trajectory data.
 
         Args:
@@ -534,6 +532,8 @@ class MDSys(list):
             INTERVAL (int, optional): Interval between frames. Defaults to 1.
             suffix (str, optional): Suffix for output files. Defaults to None.
             plot (bool, optional): Whether to plot the results. Defaults to True.
+            loglocator (bool, optional): Whether to use log locator. Defaults to True.
+
         Returns:
             np.ndarray: Combined SED for all directions
         """
@@ -556,21 +556,23 @@ class MDSys(list):
             suffix=suffix
         )
         if plot:
-            sed_calc.plot_sed_1d(spectrum, nk, ax=None)
+            fig, ax = sed_calc.plot_sed_1d(spectrum, nk, ax=None, loglocator=loglocator)
+            return fig, ax
+        return None, None
 
-        return spectrum, sed_calc
-
-    def _calc_sed_2d_from_traj(self, save_dir: str, k_vec_tmp: np.ndarray, nk_range: tuple[int, int] = (1, 21), SKIP: int = 0, INTERVAL: int = 1, suffix: str = None, plot: bool = True) -> tuple[plt.Figure, plt.Axes]:
+    def _calc_sed_2d_from_traj(self, save_dir: str, k_vec_tmp: np.ndarray, nk_range: tuple[float, float, float] = (1, 21, 0.5), SKIP: int = 0, INTERVAL: int = 1, suffix: str = None, plot: bool = True, k_max: float = None, loglocator: bool = True) -> tuple[plt.Figure, plt.Axes]:
         """Calculate and plot 2D spectral energy density.
 
         Args:
             save_dir (str): Directory to save results
             k_vec_tmp (np.ndarray): k-vector direction
-            nk_range (tuple[int, int], optional): Range of nk values (start, end). Defaults to (1, 21).
+            nk_range (tuple[float, float, float], optional): Range of nk values (start, end, step). Defaults to (1, 21, 0.5).
             SKIP (int, optional): Number of frames to skip. Defaults to 0.
             INTERVAL (int, optional): Interval between frames. Defaults to 1.
             suffix (str, optional): Suffix for output files. Defaults to None.
             plot (bool, optional): Whether to plot the results. Defaults to True.
+            k_max (float, optional): Maximum k value. Defaults to None.
+            loglocator (bool, optional): Whether to use log locator. Defaults to True.
 
         Returns:
             tuple[plt.Figure, plt.Axes]: Figure and axes objects if plot is True
@@ -595,12 +597,8 @@ class MDSys(list):
         )
 
         if plot:
-            # Calculate maximum k value
-            k_max = 2 * np.pi / (self.cells[0, 0]/15)
-
             # Plot 2D SED
-            fig, ax = sed_calc.plot_sed_2d(K, Omega, Z, k_max=k_max)
-            plt.tight_layout()
+            fig, ax = sed_calc.plot_sed_2d(K, Omega, Z, k_max=k_max, loglocator=loglocator)
 
             # Save plot if directory is provided
             if save_dir:
@@ -608,7 +606,6 @@ class MDSys(list):
                             dpi=300, bbox_inches='tight')
 
             return fig, ax
-
         return None, None
 
     def _calc_time_correlation(self, time_corre_max: int = 0, skip: int = 0, interval: int = 0, calc_pacf: bool = False, plot: bool = True, save_dir: str = None) -> dict:
@@ -668,8 +665,8 @@ class MDSys(list):
         # Plot the results if plot is True
         if plot:
             fig_ax = tc_calc.plot_time_correlation(results, save_dir)
-
-        return results, fig_ax
+            return results, fig_ax
+        return results, None
 
 
 if __name__ == "__main__":

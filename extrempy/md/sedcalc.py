@@ -3,10 +3,11 @@ from tqdm import tqdm
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm, ticker
 
-try
+try:
     from extrempy.constant import *
-except  
+except:
     from ..constant import *
 
 
@@ -164,13 +165,14 @@ class SEDCalc:
 
         return total_spectrum
 
-    def plot_sed_1d(self, data: np.ndarray, k_value: float, ax: plt.Axes = None) -> tuple[plt.Figure, plt.Axes]:
+    def plot_sed_1d(self, data: np.ndarray, k_value: float, ax: plt.Axes = None, loglocator: bool = True) -> tuple[plt.Figure, plt.Axes]:
         """Plot 1D spectral energy density.
 
         Args:
             data (np.ndarray): SED data array with shape (nfreq, 2)
             k_value (float): k-vector value
             ax (plt.Axes, optional): Matplotlib axes to plot on. Defaults to None.
+            loglocator (bool, optional): Whether to use log locator. Defaults to True.
 
         Returns:
             tuple[plt.Figure, plt.Axes]: Figure and axes objects
@@ -180,25 +182,26 @@ class SEDCalc:
         else:
             fig = ax.figure
 
-        ax.plot(data[:, 0], data[:, 1], '-o', ms=2,
+        ax.plot(data[:, 0], data[:, 1], '-o', color='#e887bd', ms=2,
                 label=f'k={k_value}' + r'$\rm{\mathring A^{-1}}$')
-
+        if loglocator:
+            ax.set_yscale('log')
         ax.set_xlim(0, )
         ax.set_xlabel(r'$\omega$ ($\rm{fs^{-1}}$)')
         ax.set_ylabel(r'$C(k,\omega)$')
         ax.legend(fontsize=6)
         plt.tight_layout()
-        plt.show()
+        # plt.show()
 
         return fig, ax
 
-    def generate_sed_2d(self, save_dir: str, k_vec_tmp: np.ndarray, nk_range: tuple[int, int], suffix: str = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def generate_sed_2d(self, save_dir: str, k_vec_tmp: np.ndarray, nk_range: tuple[float, float, float], suffix: str = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Generate 2D SED data by calculating multiple k-vectors.
 
         Args:
             save_dir (str): Directory to save results
             k_vec_tmp (np.ndarray): k-vector direction
-            nk_range (tuple[int, int]): Range of nk values (start, end)
+            nk_range (tuple[float, float, float]): Range of nk values (start, end, step)
             suffix (str, optional): Suffix for output files. Defaults to None.
 
         Returns:
@@ -211,7 +214,7 @@ class SEDCalc:
         freq = None
 
         unit_k_vec = k_vec_tmp / np.linalg.norm(k_vec_tmp)
-        progress_bar = tqdm(range(*nk_range))
+        progress_bar = tqdm(np.arange(*nk_range))
 
         for nk in progress_bar:
             try:
@@ -255,7 +258,7 @@ class SEDCalc:
         return K, Omega, data_array
 
     def plot_sed_2d(self, K: np.ndarray, Omega: np.ndarray, Z: np.ndarray,
-                    k_max: float = None, ax: plt.Axes = None) -> tuple[plt.Figure, plt.Axes]:
+                    k_max: float = None, ax: plt.Axes = None, loglocator: bool = True) -> tuple[plt.Figure, plt.Axes]:
         """Plot 2D spectral energy density.
 
         Args:
@@ -264,6 +267,7 @@ class SEDCalc:
             Z (np.ndarray): SED data array
             k_max (float, optional): Maximum k value to plot. Defaults to None.
             ax (plt.Axes, optional): Matplotlib axes to plot on. Defaults to None.
+            loglocator (bool, optional): Whether to use log locator. Defaults to True.
 
         Returns:
             tuple[plt.Figure, plt.Axes]: Figure and axes objects
@@ -272,9 +276,10 @@ class SEDCalc:
             fig, ax = plt.subplots(figsize=(6, 4), dpi=200)
         else:
             fig = ax.figure
-
-        contour = ax.contourf(K, Omega, Z, levels=100, cmap='Blues')
-
+        if loglocator:
+            contour = ax.contourf(K, Omega, Z, locator=ticker.LogLocator(), levels=1000, cmap='RdBu_r')
+        else:
+            contour = ax.contourf(K, Omega, Z, levels=1000, cmap='RdBu_r')
         ax.set_ylim(0, )
         if k_max is not None:
             ax.set_xlim(0, k_max)
@@ -286,6 +291,6 @@ class SEDCalc:
 
         plt.colorbar(contour, ax=ax, label=r'$C(k,\omega)$')
         plt.tight_layout()
-        plt.show()
+        # plt.show()
 
         return fig, ax
