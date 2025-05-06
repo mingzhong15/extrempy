@@ -4,9 +4,9 @@ from typing import Callable
 import numpy as np
 import matplotlib.pyplot as plt
 
-try
+try:
     from extrempy.constant import *
-except  
+except:
     from ..constant import *
 
 
