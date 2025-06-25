@@ -77,7 +77,7 @@ def _get_case_list(SET_DIR, file='type.raw', index=-2):
 
     return np.unique(p_list)
 
-def _read_soap_from_poscar( REF_DIR, fmt='vasp/poscar' ):
+def _read_soap_from_pos_file( REF_DIR, fmt='vasp/poscar' ):
 
     label_ref = []
     all_soap_ref = []
