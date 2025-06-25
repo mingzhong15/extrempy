@@ -1,4 +1,5 @@
 from extrempy.constant import *
+from extrempy.setsys import SetSys
 
 from dscribe.descriptors import SOAP
 from sklearn.preprocessing import StandardScaler
