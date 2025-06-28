@@ -17,21 +17,26 @@ class PostSetSys(SetSys):
     def _read_thermo(self, ):
         super()._read_thermo()
 
-    def _read_soap(self, INTERVAL = 10,  is_frame_average = True):
+    def _read_soap(self, INTERVAL = 10, target_species = None,  is_frame_average = True):
 
         print('soap descriptor is estimated at ', self.SET_DIR)
         
         confs = dpdata.LabeledSystem( self.SET_DIR, fmt="deepmd/npy")
-        species = list(np.unique(confs.get_atom_names()))
+
+        if target_species is None:
+            self.species = list(np.unique(confs.get_atom_names()))
+        else:
+            self.species = target_species
 
         soap = SOAP(
-                species=species,
+                species=self.species,
                 r_cut=6.0,            # 重要参数：截断半径
                 periodic=True,        # 假设数据为周期性体系（根据实际情况调整）
                 n_max=8,              # 径向基函数数量
                 l_max=6,              # 角动量量子数
                 sigma=1.0,            # 高斯宽度
                 sparse=False,
+                
             )
         
         all_descriptors = []
@@ -39,9 +44,10 @@ class PostSetSys(SetSys):
         for idx in range(0, len(confs), INTERVAL):   
             # 转换为ASE Atoms对象（dpdata -> ASE转换）
             atoms = confs[idx].to_ase_structure()
-            
+            atom_symbols = atoms[0].get_chemical_symbols()
+            mask = [symbol in self.species for symbol in atom_symbols]
             # 生成当前构型所有原子的SOAP描述符
-            descriptors = soap.create(atoms[0])
+            descriptors = soap.create(atoms[0][mask])
 
             if is_frame_average:
                 # 对构型内所有原子的SOAP进行平均 (不推荐）
@@ -77,7 +83,7 @@ def _get_case_list(SET_DIR, file='type.raw', index=-2):
 
     return np.unique(p_list)
 
-def _read_soap_from_pos_file( REF_DIR, fmt='vasp/poscar' ):
+def _read_soap_from_pos_file( REF_DIR, target_species=None, fmt='vasp/poscar' ):
 
     label_ref = []
     all_soap_ref = []
@@ -91,7 +97,10 @@ def _read_soap_from_pos_file( REF_DIR, fmt='vasp/poscar' ):
         print('read '+  pos_file )
 
         confs = dpdata.System(pos_file, fmt=fmt)
-        species = list(np.unique(confs.get_atom_names()))
+        if target_species is None:
+            species = list(np.unique(confs.get_atom_names()))
+        else:
+            species = target_species
     
         soap = SOAP(
             species=species,
@@ -104,7 +113,9 @@ def _read_soap_from_pos_file( REF_DIR, fmt='vasp/poscar' ):
         )
         
         atoms = confs.to_ase_structure()
-        descriptors = soap.create(atoms[0])
+        atom_symbols = atoms[0].get_chemical_symbols()
+        mask = [symbol in species for symbol in atom_symbols]
+        descriptors = soap.create(atoms[0][mask])
         
         all_descriptors.append(descriptors) 
 
