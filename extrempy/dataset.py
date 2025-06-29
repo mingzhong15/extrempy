@@ -1,5 +1,9 @@
 from extrempy.constant import *
 
+from dscribe.descriptors import SOAP
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+
 class SetSys():
 
     def __init__(self, set_dir, is_printf=True):
@@ -92,3 +96,200 @@ class SetSys():
         self.temp = fpar
         
         
+    def _read_soap(self, INTERVAL = 10, target_species = None,  is_frame_average = True):
+
+        print('soap descriptor is estimated at ', self.SET_DIR)
+        
+        confs = dpdata.LabeledSystem( self.SET_DIR, fmt="deepmd/npy")
+
+        if target_species is None:
+            self.species = list(np.unique(confs.get_atom_names()))
+        else:
+            self.species = target_species
+
+        soap = SOAP(
+                species=self.species,
+                r_cut=6.0,            # 重要参数：截断半径
+                periodic=True,        # 假设数据为周期性体系（根据实际情况调整）
+                n_max=8,              # 径向基函数数量
+                l_max=6,              # 角动量量子数
+                sigma=1.0,            # 高斯宽度
+                sparse=False,
+                
+            )
+        
+        all_descriptors = []
+        # 遍历每个构型
+        for idx in range(0, len(confs), INTERVAL):   
+            # 转换为ASE Atoms对象（dpdata -> ASE转换）
+            atoms = confs[idx].to_ase_structure()
+            atom_symbols = atoms[0].get_chemical_symbols()
+            mask = [symbol in self.species for symbol in atom_symbols]
+            # 生成当前构型所有原子的SOAP描述符
+            descriptors = soap.create(atoms[0][mask])
+
+            if is_frame_average:
+                # 对构型内所有原子的SOAP进行平均 (不推荐）
+                descrip_ave = np.mean(descriptors, axis=0)
+                all_descriptors.append(descrip_ave)
+
+            else:
+                all_descriptors.append(descriptors)
+
+
+        if is_frame_average:
+            X = np.concatenate(all_descriptors, axis=0)
+            X = X.reshape(-1, descrip_ave.shape[0])      
+
+            self.soap_frame = X
+            print('vector of SOAP is generate : ', self.soap_frame.shape)
+        else:
+            X = np.concatenate(all_descriptors, axis=0)
+            X = X.reshape(-1, descriptors.shape[1])
+
+            self.soap_atomic = X
+
+            print('vector of SOAP is generate : ', self.soap_atomic.shape)
+
+def _get_case_list(SET_DIR, file='type.raw', index=-2):
+    
+    p_list = []
+    tmp = glob.glob( os.path.join(SET_DIR, file))
+    
+    for tmp0 in tmp:
+    
+        p_list = np.append(p_list, tmp0.split('/')[index])
+
+    return np.unique(p_list)
+
+def _read_soap_from_pos_file( REF_DIR, target_species=None, fmt='vasp/poscar' ):
+
+    label_ref = []
+    all_soap_ref = []
+
+    pos_list = glob.glob( os.path.join( REF_DIR, '*.POSCAR') )
+
+    all_descriptors = []
+    
+    for idx, pos_file in enumerate(pos_list):
+
+        print('read '+  pos_file )
+
+        confs = dpdata.System(pos_file, fmt=fmt)
+        if target_species is None:
+            species = list(np.unique(confs.get_atom_names()))
+        else:
+            species = target_species
+    
+        soap = SOAP(
+            species=species,
+            r_cut=6.0,            # 重要参数：截断半径
+            periodic=True,        # 假设数据为周期性体系（根据实际情况调整）
+            n_max=8,              # 径向基函数数量
+            l_max=6,              # 角动量量子数
+            sigma=1.0,            # 高斯宽度
+            sparse=False,
+        )
+        
+        atoms = confs.to_ase_structure()
+        atom_symbols = atoms[0].get_chemical_symbols()
+        mask = [symbol in species for symbol in atom_symbols]
+        descriptors = soap.create(atoms[0][mask])
+        
+        all_descriptors.append(descriptors) 
+
+    X = np.concatenate(all_descriptors, axis=0)
+    X = X.reshape(-1, descriptors.shape[1])
+
+    return X
+
+class MultiSetSys():
+
+    def __init__(self, SET_DIR_LIST, is_printf=True):
+
+        self.SET_DIR_LIST = SET_DIR_LIST
+        self.is_printf = is_printf
+
+        self.systems = []
+
+        self._read_all_systems()
+        
+        # local atomic environment
+        self.soap_a_all = None
+        self.label_a_all = None
+        self.soap_f_all = None
+        self.label_f_all = None
+
+        # thermodynamic information
+        self.pres_a_all = None
+        self.temp_a_all = None
+        self.pres_f_all = None
+        self.temp_f_all = None
+
+        # force information
+        self.f_fave_all = None
+        self.f_fstd_all = None
+
+    def _read_all_systems(self,):
+
+        for SET_DIR in self.SET_DIR_LIST:
+
+            sys = SetSys(SET_DIR, is_printf=self.is_printf)
+            self.systems.append(sys)
+
+            if self.is_printf:
+                print('system '+ SET_DIR + ' is readed')
+
+    def _read_all_soap(self, INTERVAL = 10, target_species = None,  is_frame_average = True):
+
+        for s_idx, sys in enumerate(self.systems):
+
+            sys._read_soap(INTERVAL = INTERVAL, target_species = target_species, is_frame_average = is_frame_average)
+
+            if is_frame_average:
+                sys.label_f = np.ones(sys.soap_frame.shape[0])*s_idx
+            else:
+                sys.label_a = np.ones(sys.soap_atomic.shape[0])*s_idx
+
+        if is_frame_average:
+            self.soap_f_all = np.concatenate([sys.soap_frame for sys in self.systems], axis=0)  
+            self.label_f_all = np.concatenate([sys.label_f for sys in self.systems], axis=0)
+
+        else:
+            self.soap_a_all = np.concatenate([sys.soap_atomic for sys in self.systems], axis=0)
+            self.label_a_all = np.concatenate([sys.label_a for sys in self.systems], axis=0)
+
+    def _read_all_thermo(self, INTERVAL = 10, is_frame_average = True):
+
+        for s_idx, sys in enumerate(self.systems):
+
+            sys._read_thermo()
+
+            # (frame, 1) -> (frame, natoms)
+            if not is_frame_average:
+
+                #print('SOAP shape: ', sys.soap_atomic.shape, 'pres shape: ', sys.pres.shape)
+                natom = int(sys.soap_atomic.shape[0]/ sys.pres[::INTERVAL].shape[0])
+
+                sys.pres_a = np.repeat(sys.pres[::INTERVAL], natom, axis=0)
+                sys.temp_a = np.repeat(sys.temp[::INTERVAL], natom, axis=0)
+
+        if is_frame_average:
+            self.pres_f_all = np.concatenate([sys.pres[::INTERVAL] for sys in self.systems], axis=0)
+            self.temp_f_all = np.concatenate([sys.temp[::INTERVAL] for sys in self.systems], axis=0)
+        else:
+            self.pres_a_all = np.concatenate([sys.pres_a for sys in self.systems], axis=0)
+            self.temp_a_all = np.concatenate([sys.temp_a for sys in self.systems], axis=0)
+
+    def _read_all_force(self, INTERVAL = 10, is_frame_average = True):
+
+        if not is_frame_average:
+            raise KeyError('force is not frame averaged')
+
+        for s_idx, sys in enumerate(self.systems):
+
+            sys._read_force()
+
+        self.f_fave_all = np.concatenate([sys.f_ave[::INTERVAL] for sys in self.systems], axis=0)
+        self.f_fstd_all = np.concatenate([sys.f_std[::INTERVAL] for sys in self.systems], axis=0)
+
