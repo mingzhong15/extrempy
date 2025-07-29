@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import time
 import glob
 import dpdata
+import json
 
 from monty.serialization import loadfn,dumpfn
 from scipy.optimize import curve_fit
