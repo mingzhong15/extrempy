@@ -92,35 +92,6 @@ def _generate_dpgen_template():
 
     return template_param
 
-    
-def _generate_dpgen_machine_from_file(machine_file, prefix, is_pimd=False, nbeads=8):
-
-    with open(machine_file, 'r') as f:
-        machine_param = json.load(f)
-
-    machine_param['train'][0]['machine']['remote_profile']['input_data']['job_name'] = prefix + '_dpgen_dp'
-    machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['job_name'] = prefix + '_dpgen_md'
-    machine_param['fp'][0]['machine']['remote_profile']['input_data']['job_name'] = prefix + '_dpgen_fp'
-    
-    if not is_pimd:
-        machine_param['model_devi'][0]['command'] = 'lmp -i input.lammps -v restart 0'
-    else:
-        machine_param['model_devi'][0]['command'] = 'mpirun --allow-run-as-root -np %.d lmp'%(nbeads)
-
-        if nbeads == 8:
-            gpu_type = 'c8_m32_1 * NVIDIA V100'
-        elif nbeads == 16:
-            gpu_type = 'c16_m62_1 * NVIDIA T4'
-        elif nbeads == 32:
-            gpu_type = 'c32_m64_cpu'
-        else:
-            raise ValueError('nbeads must be 8, 16, or 32')
-
-        machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['scass_type'] = gpu_type
-        machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['image_address'] = 'registry.dp.tech/dptech/dpmd:2.2.8-cuda12.0'
-    
-    return machine_param
-
 
 class DPGENParamGenerator:
 
@@ -139,8 +110,16 @@ class DPGENParamGenerator:
 
         self.jparam["default_training_param"]["model"]["type_map"] = self.type_map
 
+    def _set_init_data(self, SET_DIR, prefix='*'):
 
-    def _set_init_data(self, SET_DIR, SET_LIST):
+        set_list = glob.glob(os.path.join(SET_DIR, prefix))
+
+        SET_LIST = []
+
+        for set_path in set_list:
+            # Calculate relative path from PWD to set_path
+            relative_path = os.path.relpath(set_path, SET_DIR)
+            SET_LIST.append(relative_path)
 
         self.jparam["init_data_prefix"] = SET_DIR
         self.jparam['init_data_sys'] = SET_LIST
@@ -271,6 +250,36 @@ class DPGENParamGenerator:
 
         self.jparam["fp_task_max"] = len(T_list) * len(p_list) * numb_frame_per_iter_per_PT
         self.jparam["fp_task_min"] = len(T_list) * len(p_list) * 1
+
+    
+def _generate_dpgen_machine_from_file(machine_file, prefix, is_pimd=False, nbeads=8):
+
+    with open(machine_file, 'r') as f:
+        machine_param = json.load(f)
+
+    machine_param['train'][0]['machine']['remote_profile']['input_data']['job_name'] = prefix + '_dpgen_dp'
+    machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['job_name'] = prefix + '_dpgen_md'
+    machine_param['fp'][0]['machine']['remote_profile']['input_data']['job_name'] = prefix + '_dpgen_fp'
+    
+    if not is_pimd:
+        machine_param['model_devi'][0]['command'] = 'lmp -i input.lammps -v restart 0'
+    else:
+        machine_param['model_devi'][0]['command'] = 'mpirun --allow-run-as-root -np %.d lmp'%(nbeads)
+
+        if nbeads == 8:
+            gpu_type = 'c8_m32_1 * NVIDIA V100'
+        elif nbeads == 16:
+            gpu_type = 'c16_m62_1 * NVIDIA T4'
+        elif nbeads == 32:
+            gpu_type = 'c32_m64_cpu'
+        else:
+            raise ValueError('nbeads must be 8, 16, or 32')
+
+        machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['scass_type'] = gpu_type
+        machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['image_address'] = 'registry.dp.tech/dptech/dpmd:2.2.8-cuda12.0'
+    
+    return machine_param
+
 
 def split_temperature_range(T_list, delta_T):
     """
