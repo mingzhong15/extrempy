@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from extrempy.constant import *
+import json
 
 class IPIInputGenerator:
 
