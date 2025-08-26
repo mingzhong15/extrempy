@@ -181,7 +181,9 @@ class LAMMPSInputGenerator:
             tmp += type0 + ' '
         self.strs += 'dump_modify           1 element ' + tmp + '\n\n'
 
-    def _set_calculations(self, is_rdf = True, is_thermo = True):
+
+    def _set_calculations(self, is_rdf = True, is_thermo = True,
+                                mode = None, run_steps = 10000):
 
         self.strs += '\n # -------------------- compute -------------------- #\n'
 
@@ -210,6 +212,55 @@ class LAMMPSInputGenerator:
             self.strs += '                      title "# step temp[K] press[bars] vol[A^3] Lx[A] Ly[A] Lz[A] density[gcc] etotal[eV] enthalpy[eV]" &\n'
             self.strs += '                      file '+outfile+' screen no\n\n'
 
+        if mode == 'thermal_cond':
+
+            self.strs += '\n # -------------------- thermal conducitiviy -------------------- #\n'
+            
+            self.strs += 'variable                Nevery equal 1\n'
+            self.strs += 'variable                Nrepeat equal %.d\n'%run_steps
+            self.strs += 'variable                Nfreq equal ${Nevery}*${Nrepeat}\n\n'
+            
+            self.strs += 'group                   none empty\n'
+            
+            self.strs += 'compute                 non_KE none ke/atom\n'
+            self.strs += 'compute                 non_PE none pe/atom\n'
+            self.strs += 'compute                 non_SS none centroid/stress/atom NULL virial\n\n'
+            
+            self.strs += 'compute                 KE all ke/atom\n'
+            self.strs += 'compute                 PE all pe/atom\n'
+            self.strs += 'compute                 STRESS all centroid/stress/atom NULL virial\n\n'
+            
+            self.strs += 'compute                 4 all heat/flux KE PE STRESS \n'
+            self.strs += 'compute                 5 all heat/flux non_KE non_PE STRESS #conduction\n'
+            self.strs += 'compute                 6 all heat/flux KE PE non_SS #convection\n\n'
+            
+            self.strs += 'variable                Jx equal c_4[1]/vol #in lammps, heat flux J=c_flux/vol \n'
+            self.strs += 'variable                Jy equal c_4[2]/vol\n'
+            self.strs += 'variable                Jz equal c_4[3]/vol\n\n'
+            
+            # the following two types of decomposition work the same
+            self.strs += 'variable                Jxconduc equal c_4[1]/vol-c_4[4]/vol\n'
+            self.strs += 'variable                Jyconduc equal c_4[2]/vol-c_4[5]/vol\n'
+            self.strs += 'variable                Jzconduc equal c_4[3]/vol-c_4[6]/vol\n\n'
+            
+            self.strs += 'variable                Jxconvec equal c_4[4]/vol\n'
+            self.strs += 'variable                Jyconvec equal c_4[5]/vol\n'
+            self.strs += 'variable                Jzconvec equal c_4[6]/vol\n\n'
+            
+            self.strs += 'fix                     JJ all ave/correlate ${Nevery} ${Nrepeat} ${Nfreq} v_Jx v_Jy v_Jz  type auto file J0Jt.dat ave running \n'
+            self.strs += 'fix                     JJ_v all ave/correlate ${Nevery} ${Nrepeat} ${Nfreq} v_Jxconduc v_Jyconduc v_Jzconduc type auto file J0Jt_conduction.dat ave running  \n'
+            self.strs += 'fix                     JJ_c all ave/correlate ${Nevery} ${Nrepeat} ${Nfreq} v_Jxconvec v_Jyconvec v_Jzconvec type auto file J0Jt_convection.dat ave running  \n\n'
+         
+    def _set_rerun(self, rerun_file = 'dump.lammps', run_steps = None ):
+
+        self.strs += '\n # -------------------- rerun -------------------- #\n'
+
+        if run_steps is None:
+            self.strs += 'fix                     {} dump x y z vx vy vz box no'.format(rerun_file)
+        
+        else:
+            self.strs += 'fix                     {} last {} dump x y z vx vy vz box no'.format(rerun_file, run_steps)
+        
     def _set_trajectory(self, ensemble = 'npt', 
                         run_steps = 10000, T = 300, p = 1.0):
 
