@@ -4,26 +4,43 @@ import json
 
 class DPKITParamGenerator:
 
-    def __init__(self, work_dir, type_map, is_ele = True):
+    def __init__(self, work_dir, type_map, 
+                 is_ele = True, 
+                 is_restart=False, model_ckpt=None):
 
         self.work_dir = work_dir
         self.type_map = type_map
         self.is_ele = is_ele
+        self.is_restart = is_restart
+
+        self.dataset_list = []
+        self.newset_list  = []
+
+        self.model_ckpt = model_ckpt
 
     def _get_training_set(self, set_dir, prefix='*'):
 
         self.set_dir = set_dir
         set_list = glob.glob(os.path.join(set_dir, prefix, '*'))
 
-        # 构建出相对路径
-        self.dataset_list = []
-
         for set_path in set_list:
             # Calculate relative path from PWD to set_path
             relative_path = os.path.relpath(set_path, self.work_dir)
             self.dataset_list.append(relative_path)
 
-    def _generate_training_params(self, stop_batch=1000000):
+
+    def _get_new_training_set(self, set_dir, prefix='*'):
+
+        set_list = glob.glob(os.path.join(set_dir, prefix, '*'))
+
+        for set_path in set_list:
+            # Calculate relative path from PWD to set_path
+            relative_path = os.path.relpath(set_path, self.work_dir)
+            self.newset_list.append(relative_path)
+
+    def _generate_training_params(self, stop_batch=1000000, is_virial=True):
+
+        self.is_virial = is_virial
 
         training_param = {
             "model": {
@@ -79,6 +96,14 @@ class DPKITParamGenerator:
             "_comment": "that's all"
         }
 
+
+        if not self.is_virial:
+            training_param["loss"]["start_pref_v"] = 0.0
+            training_param["loss"]["limit_pref_v"] = 0.0
+
+        if self.is_restart:
+            training_param["training"]["training_data"]["systems"].extend(self.newset_list)
+            training_param["training"]["training_data"]["auto_prob"] = "prob_sys_size; %.d:%.d:%.16f; %.d:%.d:%.16f"%(0, len(self.dataset_list), 0.8, len(self.dataset_list), len(self.dataset_list)+len(self.newset_list), 0.2)
         
         if self.is_ele:
             training_param["model"]["fitting_net"]["numb_fparam"] = 1
@@ -88,10 +113,7 @@ class DPKITParamGenerator:
         with open( os.path.join(self.work_dir, 'input.json'), 'w') as f:
             json.dump(training_param, f, indent=4)
 
-    def _generate_job_params(self, job_file, job_name):
-
-        with open(job_file, 'r') as f:
-            job_param = json.load(f)
+    def _generate_job_params(self, job_name, platform= None):
 
         if self.is_ele:
             ele_label = 'f'
@@ -99,7 +121,24 @@ class DPKITParamGenerator:
             ele_label = 'no_f'
 
         self.job_name = job_name + '_' + ele_label
-        job_param["job_name"] = self.job_name
+
+        if self.is_restart:
+            cmd = "dp train input.json --init-model model.ckpt > train_log 2>&1 && dp freeze -o graph.pb && dp compress -i graph.pb -o cp.pb -t input.json > comp.log"
+        else:
+            cmd = "dp train input.json > train_log 2>&1 && dp freeze -o graph.pb && dp compress -i graph.pb -o cp.pb -t input.json > comp.log"
+        
+        job_param = {
+            "job_name": self.job_name,
+            "command": cmd,
+            "log_file": "train_log",
+            "backward_files": ["input.json", "train_log", "lcurve.out ","model.ckpt", 
+                               "graph.pb", "cp.pb", "comp.log"],
+            "project_id": platform,
+            "platform": "ali",
+            "machine_type": "1 * NVIDIA V100_32g",
+            "job_type": "container",
+            "image_address": "registry.dp.tech/dptech/dpmd:2.2.8-cuda12.0"
+        }
 
         with open(os.path.join(self.work_dir, 'job.json'), 'w') as f:
             json.dump(job_param, f, indent=4)
@@ -108,6 +147,9 @@ class DPKITParamGenerator:
 
         if platform == 'bh':
             os.chdir(self.work_dir)
+
+            if self.is_restart:
+                os.system('cp '+self.model_ckpt+' model.ckpt')
 
             try:
                 os.system('mkdir  ../'+self.job_name)
@@ -118,3 +160,4 @@ class DPKITParamGenerator:
             os.system(pwd)
         else:
             print('platform not supported')
+    

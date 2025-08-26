@@ -316,6 +316,9 @@ def split_temperature_range(T_list, delta_T):
 
 def _generate_temp_list(xmin, xmax, scale=0.2, delta_x=50):
 
+    if xmin == xmax:
+        return [xmin]
+
     x_list = [xmin]
     current_x = xmin
     while(True):
@@ -326,6 +329,9 @@ def _generate_temp_list(xmin, xmax, scale=0.2, delta_x=50):
     return x_list
 
 def _generate_pres_list(xmin, xmax, delta_min=1, Nx_max=100):
+
+    if xmin == xmax:
+        return [xmin]
 
     scale = xmax / xmin
     x_list = [xmin]
