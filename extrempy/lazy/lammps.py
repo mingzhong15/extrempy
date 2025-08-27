@@ -2,6 +2,7 @@ from extrempy.lazy.lib import _get_mass_map, _get_lattice_str
 from extrempy.constant import *
 import json
 
+
 class LAMMPSInputGenerator:
 
     def __init__(self, work_dir, dt = 0.001, type_map = None, 
@@ -21,15 +22,21 @@ class LAMMPSInputGenerator:
         self.is_pimd = is_pimd
         self.nbeads  = nbeads
         self.is_ipi  = False
+        
         self.is_rdf  = False
         self.is_thermo = False
+        self.is_tc = False
+
+        
+        self.is_rerun = False
+        self.is_dump = False
 
         self.strs += 'variable              ibead uloop 99 pad\n'
 
         self.strs += 'variable              nbeads equal %.d\n\n'%self.nbeads
 
         self.strs += 'timestep              %.6f \n'%(self.dt)
-
+        
     def _set_configuration(self, mode = 'from_file', 
                            data_file = None,
                            lattice_type = None, 
@@ -137,24 +144,35 @@ class LAMMPSInputGenerator:
         self.strs += 'velocity              all create $T %.d dist gaussian rot yes \n'%(np.random.randint(0, 10000))
 
         if ensemble == 'npt':
-            self.strs += 'fix                   1 all npt temp $T $T ${tdamp} aniso $p $p ${pdamp} \n'
+
+            if self.is_pimd:
+                self.strs += 'fix                   1 all pimd/langevin fmmode physical ensemble npt integrator obabo thermostat PILE_L ${ibead} temp $T tau ${tdamp} scale 1.0 barostat BZP aniso $p taup ${pdamp} \n'
+            else:
+                self.strs += 'fix                   1 all npt temp $T $T ${tdamp} aniso $p $p ${pdamp} \n'
+                
             self.strs += 'run                   {} \n'.format(run_steps)
             self.strs += 'unfix                 1 \n\n'
 
         elif ensemble == 'heat-until-melt':
-            self.strs += 'fix                   1 all npt temp $T $T ${tdamp} aniso $p $p ${pdamp} \n'
-            self.strs += 'run                   {} \n'.format(10000)
-            self.strs += 'unfix                 1 \n\n'
 
-            self.strs += 'fix                   1 all npt temp ${T2} ${T2} ${tdamp} aniso $p $p ${pdamp} \n'
-            self.strs += 'run                   {} \n'.format(run_steps)
-            self.strs += 'unfix                 1 \n\n'            
-
-            self.strs += 'fix                   1 all npt temp $T $T ${tdamp} aniso $p $p ${pdamp} \n'
-            self.strs += 'run                   {} \n'.format(run_steps)
-            self.strs += 'unfix                 1 \n\n'        
+            if not self.is_pimd: 
+                self.strs += 'fix                   1 all npt temp $T $T ${tdamp} aniso $p $p ${pdamp} \n'
+                self.strs += 'run                   {} \n'.format(10000)
+                self.strs += 'unfix                 1 \n\n'
+    
+                self.strs += 'fix                   1 all npt temp ${T2} ${T2} ${tdamp} aniso $p $p ${pdamp} \n'
+                self.strs += 'run                   {} \n'.format(run_steps)
+                self.strs += 'unfix                 1 \n\n'            
+    
+                self.strs += 'fix                   1 all npt temp $T $T ${tdamp} aniso $p $p ${pdamp} \n'
+                self.strs += 'run                   {} \n'.format(run_steps)
+                self.strs += 'unfix                 1 \n\n'        
+            else:
+                ValueError('PIMD is not support for heat-unitl-melt')
+    
 
         #self.strs += 'reset_timestep 0 \n\n'
+
 
     def _set_ipi(self, run_steps = 1000, ):
         self.strs += '\n # -------------------- i-PI run -------------------- #\n'
@@ -168,6 +186,7 @@ class LAMMPSInputGenerator:
 
     def _set_dump(self, dump_freq = 100, dump_file = 'dump.lammps'):
 
+        self.is_dump = True
         self.dump_file = dump_file
 
         if self.is_pimd:
@@ -181,15 +200,15 @@ class LAMMPSInputGenerator:
             tmp += type0 + ' '
         self.strs += 'dump_modify           1 element ' + tmp + '\n\n'
 
-
     def _set_calculations(self, is_rdf = True, is_thermo = True,
-                                mode = None, run_steps = 10000):
+                                is_tc  = False, run_steps = 10000):
 
         self.strs += '\n # -------------------- compute -------------------- #\n'
 
 
         self.is_rdf = is_rdf
         self.is_thermo = is_thermo
+        self.is_tc = is_tc
 
         if self.is_rdf:
             tmp = _generate_type_list(self.type_map)
@@ -212,7 +231,7 @@ class LAMMPSInputGenerator:
             self.strs += '                      title "# step temp[K] press[bars] vol[A^3] Lx[A] Ly[A] Lz[A] density[gcc] etotal[eV] enthalpy[eV]" &\n'
             self.strs += '                      file '+outfile+' screen no\n\n'
 
-        if mode == 'thermal_cond':
+        if self.is_tc:
 
             self.strs += '\n # -------------------- thermal conducitiviy -------------------- #\n'
             
@@ -253,19 +272,20 @@ class LAMMPSInputGenerator:
          
     def _set_rerun(self, rerun_file = 'dump.lammps', run_steps = None ):
 
+        self.is_rerun = True
+
         self.strs += '\n # -------------------- rerun -------------------- #\n'
 
         if run_steps is None:
-            self.strs += 'fix                     {} dump x y z vx vy vz box no'.format(rerun_file)
+            self.strs += 'rerun                   {} dump x y z vx vy vz box yes\n\n'.format(rerun_file)
         
         else:
-            self.strs += 'fix                     {} last {} dump x y z vx vy vz box no'.format(rerun_file, run_steps)
+            self.strs += 'rerun                   {} last {} dump x y z vx vy vz box yes\n\n'.format(rerun_file, run_steps)
         
     def _set_trajectory(self, ensemble = 'npt', 
                         run_steps = 10000, T = 300, p = 1.0):
 
         self.strs += '\n # -------------------- run -------------------- #\n'
-
 
         if ensemble == 'npt':
             if not self.is_pimd: 
@@ -277,6 +297,7 @@ class LAMMPSInputGenerator:
         self.strs += 'run                   {} \n'.format(run_steps)
         self.strs += 'unfix                 1 \n'
 
+
     def _write_input(self, file_name = 'input.lammps'):
 
 
@@ -286,26 +307,54 @@ class LAMMPSInputGenerator:
         if self.is_thermo:
             self.strs += 'unfix                 thermoprint \n\n'
 
-        if not self.is_ipi:
+        if self.is_tc:
+            self.strs += 'unfix                 JJ\n'
+            self.strs += 'unfix                 JJ_v\n'
+            self.strs += 'unfix                 JJ_c\n\n'
+
+        if self.is_ipi or self.is_rerun:
+            pass
+        else:
             self.strs += 'write_data            final.data \n\n'
 
         with open( os.path.join(self.work_dir, file_name), 'w') as f:
             f.write(self.strs)
 
+
     def _generate_job_params(self, job_name, platform= None, ncores=8):
 
         self.job_name = job_name
+        
         if self.is_pimd:
             self.job_name = job_name + '_pimd'
 
+        bk_list = ["*log.*"]
+        cmd = "lmp -in input.lammps > log.run"
+        
+        if self.is_dump:
+            bk_list.append(self.dump_file+'*')
+            cmd = "mkdir traj && " + cmd
+        
+        if self.is_rdf:
+            bk_list.append("rdf.txt*")
+        if self.is_thermo:
+            bk_list.append("thermo.dat*")
+        if self.is_tc:
+            bk_list.append("J0Jt*")
+        
+        if self.is_ipi or self.is_rerun:
+            pass
+        else:
+            bk_list.append("final.data")
+        
         job_param = {
             "job_name": self.job_name,
-            "command": "mkdir traj && lmp -in input.lammps > log.run",
+            "command": cmd,
             "log_file": "log.run",
-            "backward_files": ["rdf.txt*", "thermo.dat*", "*log.lammps*", "final.data", self.dump_file+'*'],
+            "backward_files": bk_list, 
             "project_id": platform,
             "platform": "ali",
-            "machine_type": "1 * NVIDIA V100_16g",
+            "machine_type": "c12_m92_1 * NVIDIA V100",
             "job_type": "container",
             "image_address": "registry.dp.tech/dptech/dpmd:2.2.8-cuda12.0"
         }
@@ -346,7 +395,7 @@ class LAMMPSInputGenerator:
         else:
             print('platform not supported')
 
-
+            
 def _generate_type_list(type_map):
 
     tmp = ''
