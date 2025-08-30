@@ -3,7 +3,8 @@ from xml.dom import minidom
 from extrempy.constant import *
 import json
 import re
-
+import time
+import sys
 
 class IPIInputGenerator:
 
@@ -395,6 +396,8 @@ def trans_xcvc2dump(work_dir,
     # 打开输入和输出文件
     with open(os.path.join(work_dir,xc_file), 'r') as f_xc, open( os.path.join(work_dir,vc_file), 'r') as f_vc, open( os.path.join(work_dir, output_file) , 'w') as f_out:
         frame_count = 0
+        start_time = time.time()
+        last_update_time = start_time
 
         while True:
 
@@ -481,8 +484,20 @@ def trans_xcvc2dump(work_dir,
                 f_out.write(f"{atom_id} {atom_type} {x:.8f} {y:.8f} {z:.8f} {vx:.8f} {vy:.8f} {vz:.8f}\n")
             
             frame_count += 1
-            if frame_count % 1000 == 0:
-                print(f"已处理 {frame_count} 帧")
+
+            # 每处理一定数量的帧或一定时间后更新进度
+            current_time = time.time()
+            if current_time - last_update_time > 2.0 or frame_count % 1000 == 0:  
+                elapsed = current_time - start_time
+                frames_per_second = frame_count / elapsed if elapsed > 0 else 0
+                # 使用回车符\r回到行首，实现单行更新
+                sys.stdout.write(f"\r已处理 {frame_count} 帧，耗时 {elapsed:.1f} 秒，平均 {frames_per_second:.1f} 帧/秒")
+                sys.stdout.flush()
+                last_update_time = current_time
+
+        # 处理完成后显示最终结果
+        total_time = time.time() - start_time
+        print(f"\n转换完成! 共处理 {frame_count} 帧，总耗时 {total_time:.1f} 秒")
     
     print(f"转换完成! 共处理 {frame_count} 帧")
     return True

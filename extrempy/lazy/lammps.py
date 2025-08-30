@@ -26,6 +26,7 @@ class LAMMPSInputGenerator:
         self.is_rdf  = False
         self.is_thermo = False
         self.is_tc = False
+        self.is_msd = False
 
         
         self.is_rerun = False
@@ -85,6 +86,9 @@ class LAMMPSInputGenerator:
 
         for idx in range(len(self.type_map)):
             self.strs += 'mass                  {} {} \n'.format(idx+1, self.mass_map[idx])
+
+            self.strs += 'group                 {} type {}\n'.format(self.type_map[idx], idx+1)
+            
         self.strs += '\n'
 
 
@@ -173,8 +177,8 @@ class LAMMPSInputGenerator:
 
         #self.strs += 'reset_timestep 0 \n\n'
 
-
     def _set_ipi(self, run_steps = 1000, ):
+        
         self.strs += '\n # -------------------- i-PI run -------------------- #\n'
 
         self.is_ipi  = True
@@ -201,6 +205,7 @@ class LAMMPSInputGenerator:
         self.strs += 'dump_modify           1 element ' + tmp + '\n\n'
 
     def _set_calculations(self, is_rdf = True, is_thermo = True,
+                                is_msd = False, 
                                 is_tc  = False, run_steps = 10000):
 
         self.strs += '\n # -------------------- compute -------------------- #\n'
@@ -209,17 +214,18 @@ class LAMMPSInputGenerator:
         self.is_rdf = is_rdf
         self.is_thermo = is_thermo
         self.is_tc = is_tc
+        self.is_msd = is_msd
 
         if self.is_rdf:
             tmp = _generate_type_list(self.type_map)
 
-            self.strs += 'compute               RDF all rdf 200 '+tmp+'\n'
+            self.strs += 'compute                 RDF all rdf 200 '+tmp+'\n'
 
             outfile = 'rdf.txt'
             if self.is_pimd:
                 outfile = outfile + '${ibead}'
             
-            self.strs += 'fix                   rdf all ave/time 100 100 10000 c_RDF[*] file '+outfile+' mode vector\n'
+            self.strs += 'fix                     rdf all ave/time 100 %.d %.d c_RDF[*] file '%(int(run_steps/100), run_steps)+outfile+' mode vector\n\n'
 
         if self.is_thermo:
 
@@ -231,6 +237,24 @@ class LAMMPSInputGenerator:
             self.strs += '                      title "# step temp[K] press[bars] vol[A^3] Lx[A] Ly[A] Lz[A] density[gcc] etotal[eV] enthalpy[eV]" &\n'
             self.strs += '                      file '+outfile+' screen no\n\n'
 
+        if self.is_msd:
+
+            tmp1 = ''
+            tmp2 = ''
+            for type0 in self.type_map:
+                
+                self.strs += 'compute                 {}MSD {} msd com yes average yes\n'.format(type0, type0)
+                self.strs += 'variable                my{}MSD equal c_{}MSD[4]\n\n'.format(type0, type0)
+
+                tmp1 += '${my'+type0+'MSD} '
+                tmp2 += 'MSD_'+type0+'[ang^2/ps] '
+
+            self.strs += 'compute                 MSD all msd com yes average yes\n'
+            self.strs += 'variable                myMSD equal c_MSD[4]\n\n'
+            
+            self.strs += "fix                     MSDprint all print %.d \"${STEP} "%(self.thermo_freq)+tmp1+"${myMSD}\" title \"# step "+ tmp2+"MSD[ang^2/ps] \" file MSD.dat screen no\n\n"
+
+            
         if self.is_tc:
 
             self.strs += '\n # -------------------- thermal conducitiviy -------------------- #\n'
@@ -341,6 +365,8 @@ class LAMMPSInputGenerator:
             bk_list.append("thermo.dat*")
         if self.is_tc:
             bk_list.append("J0Jt*")
+        if self.is_msd:
+            bk_list.append("MSD.dat*")
         
         if self.is_ipi or self.is_rerun:
             pass
