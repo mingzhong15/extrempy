@@ -2,23 +2,23 @@ from extrempy.md import MDSys
 
 
 # Name of the atom type, corresponding to the type in the dump file, e.g. ["C"], ["Mg", "O"], ["O", "H"], etc.
-type_name = ["C",]
+type_name = ["Si", "O"]
 
 # Path to the directory containing the dump files
-input_dir = r"E:\Users\Lenovo\Desktop\phd\file_date\2025.7\traj-1555"
+input_dir = r"C:\Users\87627\Desktop\dump.0"
 
 # Path to the output directory
-output_dir = input_dir + r"\output"
+output_dir = r"C:\Users\87627\Desktop\output"
 
 # timestep of MD (unit: fs)
 dt = 0.5
 
 # Create a MDSys object
-sys = MDSys(input_dir, format="dump.*", traj_dir='', type_name=type_name, dt=dt)
+sys = MDSys(input_dir, format="dump-m", type_name=type_name, dt=dt)
 
 # Calculate the time correlation function (VACF and PACF(optional)), and the vibrational density of states (VDOS)
 sys._calc_time_correlation(
-    time_corre_max=1000,
+    time_corre_max=4000,
     skip=0,
     interval=1,
     save_dir=output_dir,
