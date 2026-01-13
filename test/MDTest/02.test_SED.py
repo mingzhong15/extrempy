@@ -4,24 +4,24 @@ import matplotlib.pyplot as plt
 
 
 # Name of the atom type, corresponding to the type in the dump file, e.g. ["C"], ["Mg", "O"], ["O", "H"], etc.
-type_name = ["C",]
+type_name = ["Si", "O"]
 
 # Path to the directory containing the dump files
-input_dir = r"C:\Users\87627\Desktop\traj-1555"
+input_dir = r"C:\Users\87627\Desktop\dump.0"
 
 # Path to the output directory
-output_dir = input_dir + r"\output"
+output_dir = r"C:\Users\87627\Desktop\output"
 
 # timestep of MD (unit: fs)
 dt = 0.5
 
 # Create a MDSys object
-sys = MDSys(input_dir, format="dump.*", traj_dir='', type_name=type_name, dt=dt)
+sys = MDSys(input_dir, format="dump-m", type_name=type_name, dt=dt)
 
 k0 = np.array([0, 0, 0])  # K0 direction
 k1 = np.array([1, 0, 0])  # K1 direction
 k_vec_tmp = k1 - k0  # GX direction
-supercell_size_of_k_vec_tmp = 15 # supercell size alone the k_vec_tmp direction
+supercell_size_of_k_vec_tmp = 6 # supercell size alone the k_vec_tmp direction
 k_max = 2 * np.pi / (sys[0].cells[0, 0] / supercell_size_of_k_vec_tmp)
 
 # Calculate the 1D SED for nk = 10 in the GX direction
@@ -34,7 +34,7 @@ fig, ax = sys._calc_sed_from_traj(
     loglocator=True
 )
 # Any further settings of fig and ax can be added below
-ax.set_xlim(0, 0.2)
+# ax.set_xlim(0, 0.2)
 plt.tight_layout()
 plt.show()
 

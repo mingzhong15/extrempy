@@ -1,4 +1,5 @@
 import re
+import os
 from tqdm import tqdm
 
 import polars as pl
@@ -149,13 +150,24 @@ class System():
 
     def update_pos(self):
         """Call it only if you modify the positions information by modify the data."""
-        assert "xu" in self.__data.columns, "Must contains the position information."
-        self.__pos = np.c_[self.__data["xu"],
-                           self.__data["yu"], self.__data["zu"]]
+        # Handle both unwrapped (xu) and wrapped (x) coordinates
+        if "xu" in self.__data.columns and "yu" in self.__data.columns and "zu" in self.__data.columns:
+            self.__pos = np.c_[self.__data["xu"],
+                               self.__data["yu"], self.__data["zu"]]
+        elif "xs" in self.__data.columns and "ys" in self.__data.columns and "zs" in self.__data.columns:
+            # Scale fractional coordinates using box
+            self.__pos = np.c_[self.__data["xs"],
+                               self.__data["ys"], self.__data["zs"]] @ self.__box[:-1]
+        elif "x" in self.__data.columns and "y" in self.__data.columns and "z" in self.__data.columns:
+            self.__pos = np.c_[self.__data["x"],
+                               self.__data["y"], self.__data["z"]]
+        else:
+            raise ValueError("Position information not found. Expected columns: xu/yu/zu, x/y/z, or xs/ys/zs")
+
         self.__pos.flags.writeable = False
 
-        # Apply periodic boundary conditions if 'x' column is not present
-        if "x" not in self.__data.columns:
+        # Apply periodic boundary conditions if no column named x exists (unwrapped coords)
+        if "x" not in self.__data.columns and "xs" not in self.__data.columns:
             self.periodic_boundary_condition()
 
     def periodic_boundary_condition(self):
@@ -518,8 +530,13 @@ class MDSys(list):
                     type_name=self.__type_name
                 )
                 self.append(system)
-            # Skip dump_freq calculation for multi-frame files
-            self.dump_freq = 1
+
+            # Set dump_freq to 1 if it wasn't calculated from frame timesteps
+            if self.dump_freq is None:
+                self.dump_freq = 1
+                if self.__is_printf:
+                    print("Warning: Could not determine dump frequency from timesteps. Defaulting to 1.")
+                    print("This may affect time-related calculations.")
         else:
             # Multi-file mode: keep original logic
             # read and sort the trajectory file name
@@ -737,6 +754,7 @@ class MDSys(list):
         in_atoms_section = False
         atom_count = 0
         atoms_read = 0
+        timesteps = []  # Store timestep values for validation
 
         with open(file_path, 'r') as f:
             for line in f:
@@ -750,6 +768,16 @@ class MDSys(list):
                     current_frame_content = [line]
                     in_atoms_section = False
                     atoms_read = 0
+
+                    # Read and store the timestep value (next line after ITEM: TIMESTEP)
+                    try:
+                        next_line = f.readline()
+                        current_frame_content.append(next_line)
+                        timestep = int(next_line.strip())
+                        timesteps.append(timestep)
+                    except (ValueError, StopIteration):
+                        print(f"Warning: Could not read timestep for frame {len(frames)}")
+                        timesteps.append(None)
                 elif 'ITEM: NUMBER OF ATOMS' in line:
                     current_frame_content.append(line)
                     in_atoms_section = False
@@ -766,7 +794,87 @@ class MDSys(list):
                 frame_content = ''.join(current_frame_content)
                 frames.append(io.StringIO(frame_content))
 
+        # Validate frames
+        if timesteps:
+            self._validate_frames(timesteps, file_path)
+
+            # Calculate dump frequency from timestep differences
+            valid_timesteps = [t for t in timesteps if t is not None]
+            if len(valid_timesteps) > 1:
+                # Calculate intervals between consecutive timesteps
+                intervals = [valid_timesteps[i+1] - valid_timesteps[i]
+                           for i in range(len(valid_timesteps)-1)]
+                # Use the most common interval as dump frequency
+                from collections import Counter
+                interval_counts = Counter(intervals)
+                most_common_interval = interval_counts.most_common(1)[0][0]
+                self.dump_freq = most_common_interval
+                if self.__is_printf:
+                    print(f"Calculated dump frequency from timesteps: {self.dump_freq}")
+
         return frames
+
+    def _validate_frames(self, timesteps: list, file_path: str):
+        """Validate frame integrity by checking for missing or duplicate frames.
+
+        Args:
+            timesteps (list): List of timestep values from each frame
+            file_path (str): Path to the dump file for error reporting
+        """
+        valid_timesteps = [t for t in timesteps if t is not None]
+
+        if not valid_timesteps:
+            raise ValueError(f"No valid timesteps found in file: {file_path}")
+
+        # Check if timesteps are consecutive based on the most common interval
+        if len(valid_timesteps) > 1:
+            # Calculate all intervals
+            intervals = [valid_timesteps[i+1] - valid_timesteps[i]
+                        for i in range(len(valid_timesteps)-1)]
+
+            # Find the most common interval (assumed to be the correct dump frequency)
+            from collections import Counter
+            interval_counts = Counter(intervals)
+            most_common_interval = interval_counts.most_common(1)[0][0]
+
+            # Check for missing frames
+            expected_timesteps = list(range(valid_timesteps[0],
+                                          valid_timesteps[-1] + most_common_interval,
+                                          most_common_interval))
+
+            missing_timesteps = set(expected_timesteps) - set(valid_timesteps)
+            if missing_timesteps:
+                import warnings
+                warnings.warn(
+                    f"Missing frames detected in {file_path}\n"
+                    f"Missing timesteps: {sorted(missing_timesteps)}\n"
+                    f"Expected interval: {most_common_interval}",
+                    UserWarning,
+                    stacklevel=3
+                )
+
+            # Check for duplicate frames
+            duplicate_timesteps = [t for t, count in Counter(valid_timesteps).items() if count > 1]
+            if duplicate_timesteps:
+                import warnings
+                warnings.warn(
+                    f"Duplicate frames detected in {file_path}\n"
+                    f"Duplicate timesteps: {duplicate_timesteps}",
+                    UserWarning,
+                    stacklevel=3
+                )
+
+            # Check for non-uniform intervals
+            non_uniform_intervals = [i for i in intervals if i != most_common_interval]
+            if non_uniform_intervals:
+                import warnings
+                warnings.warn(
+                    f"Non-uniform intervals detected in {file_path}\n"
+                    f"Most common interval: {most_common_interval}\n"
+                    f"Other intervals found: {set(non_uniform_intervals)}",
+                    UserWarning,
+                    stacklevel=3
+                )
 
     def _calc_sed_from_traj(self, save_dir: str, k_vec_tmp: np.ndarray, nk: int = 1,
                             SKIP: int = 0, INTERVAL: int = 1, suffix: str = None, plot: bool = True, loglocator: bool = True) -> np.ndarray:
@@ -790,6 +898,10 @@ class MDSys(list):
             from extrempy.md.sedcalc import SEDCalc
         except ImportError:
             from .sedcalc import SEDCalc
+
+        # Create save directory if it doesn't exist
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
 
         # Create SEDCalc instance with trajectory data
         sed_calc = SEDCalc(
@@ -836,6 +948,10 @@ class MDSys(list):
             from extrempy.md.sedcalc import SEDCalc
         except ImportError:
             from .sedcalc import SEDCalc
+
+        # Create save directory if it doesn't exist
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
 
         # Create SEDCalc instance
         sed_calc = SEDCalc(
