@@ -509,6 +509,19 @@ ELEMENT_PRIMITIVE_ATOMS = {
 }
 
 
+
+def _get_lattice_from_data(symbol, structure_type):
+    """Look up lattice constants from ELEMENT_PHASE_DATA."""
+    data = ELEMENT_PHASE_DATA.get(symbol, {})
+    for phase in data.get("phases", []):
+        if phase["structure"] == structure_type:
+            a = phase.get("a")
+            c = phase.get("c")
+            if c:
+                return (a, c)
+            return (a,)
+    raise ValueError(f"{symbol} {structure_type} not in ELEMENT_PHASE_DATA")
+
 def generate_element_structure(element,
                                output_dir="structures",
                                target_atoms=100,
@@ -587,13 +600,15 @@ def generate_element_structure(element,
             a = LATTICE_CONSTANTS[lattice_key][0]
             atoms = bulk(element, structure_type, a=a, cubic=True)
         else:
-            atoms = bulk(element, structure_type, cubic=True)
+            a = _get_lattice_from_data(element, structure_type)[0]
+            atoms = bulk(element, structure_type, a=a, cubic=True)
     elif structure_type == 'hcp':
         if has_custom_lattice:
             a, c = LATTICE_CONSTANTS[lattice_key]
             atoms = bulk(element, 'hcp', a=a, c=c)
         else:
-            atoms = bulk(element, 'hcp')
+            a, c = _get_lattice_from_data(element, "hcp")
+            atoms = bulk(element, "hcp", a=a, c=c)
     elif structure_type == 'bct':
         if has_custom_lattice:
             a, c = LATTICE_CONSTANTS[lattice_key]
