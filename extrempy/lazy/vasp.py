@@ -1,8 +1,10 @@
-from extrempy.constant import *
-from .base import InputGenerator,fermi_dirac
-
-import json
+import numpy as np
+import os
 import dpdata
+import json
+
+from extrempy.constant import kb, J2eV
+from .base import InputGenerator,fermi_dirac
 
 class VASPGenerator(InputGenerator):
 

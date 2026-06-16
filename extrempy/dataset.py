@@ -1,8 +1,11 @@
-from extrempy.constant import *
+import numpy as np
+import os
+import glob
+import dpdata
+
+from extrempy.constant import J2eV, m2A, Pa2GPa, kb
 
 from dscribe.descriptors import SOAP
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 
 class SetSys():
 

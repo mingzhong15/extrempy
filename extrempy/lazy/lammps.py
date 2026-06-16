@@ -1,12 +1,12 @@
-from extrempy.lazy.lib import _get_mass_map, _get_lattice_str
-from extrempy.constant import *
+import numpy as np
+import os
 import json
-
-from .base import InputGenerator
-
 
 from jinja2 import Environment, FileSystemLoader
 import ase
+
+from .base import InputGenerator
+from .lib import _get_mass_map, _get_lattice_str
 
 class LAMMPSGenerator(InputGenerator):
 

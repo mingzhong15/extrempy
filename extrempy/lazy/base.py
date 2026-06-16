@@ -1,6 +1,8 @@
-
-from extrempy.constant import *
+import numpy as np
+import os
 import json
+
+from extrempy.constant import kb, J2eV
 
 
 def fermi_dirac(E, mu, T):

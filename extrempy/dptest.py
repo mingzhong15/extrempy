@@ -1,4 +1,7 @@
-from extrempy.constant import *
+import numpy as np
+import os
+
+from extrempy.constant import J2eV, m2A
 from extrempy.dataset import SetSys
 
 class TestSys():

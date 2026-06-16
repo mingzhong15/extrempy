@@ -1,7 +1,12 @@
-from extrempy.constant import *
-
-from typing import List, Tuple, Dict, Optional, Union, Set, Any
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+import glob
+import json
 import copy
+import shutil
+import subprocess
+from typing import List, Tuple, Dict, Optional, Union, Set, Any
 
 # Color mapping for different elements
 element_colors = {
@@ -565,9 +570,6 @@ class POSCARProcessor(POSCARReader):
             submit_file: Path to job submission file (optional)
             platform: Platform name for job submission (e.g., 'bh', 'slurm', 'pbs')
         """
-        import shutil
-        import subprocess
-        import json
         
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
@@ -629,8 +631,6 @@ class POSCARProcessor(POSCARReader):
             potcar_dir: Directory containing VASP pseudopotential files (folders named by elements)
             output_potcar: Output path for the combined POTCAR file
         """
-        import shutil
-        import glob
         
         found_potcars = []
         missing_elements = []
@@ -733,8 +733,6 @@ class POSCARProcessor(POSCARReader):
             dest_json: Destination JSON file path
             job_name: New job name to set
         """
-        import json
-        import shutil
         
         try:
             # Read the original JSON file
@@ -768,8 +766,6 @@ class POSCARProcessor(POSCARReader):
             submit_file: Path to job submission file
             platform: Platform name for job submission
         """
-        import subprocess
-        import json
         
         submit_filename = os.path.basename(submit_file)
         submit_path = os.path.join(output_dir, submit_filename)

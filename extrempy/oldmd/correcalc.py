@@ -1,6 +1,7 @@
-from extrempy.constant import *
-from extrempy.oldmd.base import MDSys
+import numpy as np
 import time
+
+from extrempy.oldmd.base import MDSys
 
 class TimeCorrelationCalc(MDSys):
 

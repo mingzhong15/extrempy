@@ -4,10 +4,7 @@ from typing import Callable
 import numpy as np
 import matplotlib.pyplot as plt
 
-try:
-    from extrempy.constant import *
-except:
-    from ..constant import *
+import os
 
 from extrempy.md.base import generate_even_func
 

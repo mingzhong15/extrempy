@@ -1,4 +1,6 @@
-from extrempy.constant import *
+import numpy as np
+import os
+
 from extrempy.oldmd.base import MDSys
 
 class SEDCalc(MDSys):

@@ -1,10 +1,5 @@
 import numpy as np
 
-try:
-    from extrempy.constant import *
-except ImportError:
-    from ..constant import *
-
 
 def read_dump_file(dump_path):
     """Read LAMMPS dump file using ASE."""

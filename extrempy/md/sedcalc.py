@@ -5,11 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm, ticker
 
-try:
-    from extrempy.constant import *
-except:
-    from ..constant import *
-
 
 class SEDCalc:
     def __init__(self, position: np.ndarray, velocity: np.ndarray, type_array: np.ndarray,

@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-from extrempy.constant import *
+import numpy as np
+import os
 import json
 import re
 import time

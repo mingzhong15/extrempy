@@ -1,5 +1,3 @@
-from extrempy.constant import *
-
 from typing import Dict, List, Tuple, Optional, Union
 
 class OpenMXReader:

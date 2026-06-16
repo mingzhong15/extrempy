@@ -4,11 +4,6 @@ import glob
 import os
 import re
 
-try:
-    from extrempy.constant import *
-except ImportError:
-    from ..constant import *
-
 
 def read_thermo_dat(filepath, skip_unstable=True, stable_ratio=0.3, stability_window=300):
     """

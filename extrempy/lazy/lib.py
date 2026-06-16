@@ -1,105 +1,472 @@
 
-ELEMENT_PERIODIC_TABLE = {
-    # Period 1
-    'H': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -259.16, 'note': 'Gas at STP'},
-    'He': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -272.2, 'note': 'Gas at STP (under pressure)'},
-    
-    # Period 2
-    'Li': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 3.509, 'melting_point': 180.5, 'note': 'Room temperature'},
-    'Be': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 2.285, 'lattice_c': 3.584, 'melting_point': 1287, 'note': 'Room temperature'},
-    'B': {'structure': 'Rhombohedral', 'spacegroup': 'R-3m', 'lattice_a': 5.064, 'lattice_c': 12.673, 'melting_point': 2075, 'note': 'α-B, rhombohedral'},
-    'C': {'structure': 'diamond', 'spacegroup': 'Fd-3m', 'lattice_a': 3.567, 'melting_point': 3550, 'note': 'Diamond phase'},
-    'N': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -210.0, 'note': 'Gas at STP'},
-    'O': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -218.79, 'note': 'Gas at STP'},
-    'F': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -219.67, 'note': 'Gas at STP'},
-    'Ne': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -248.59, 'note': 'Gas at STP'},
-    
-    # Period 3
-    'Na': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 4.290, 'melting_point': 97.72, 'note': 'Room temperature'},
-    'Mg': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.209, 'lattice_c': 5.211, 'melting_point': 650, 'note': 'Room temperature'},
-    'Al': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 4.046, 'melting_point': 660.32, 'note': 'Room temperature'},
-    'Si': {'structure': 'diamond', 'spacegroup': 'Fd-3m', 'lattice_a': 5.431, 'melting_point': 1414, 'note': 'Room temperature'},
-    'P': {'structure': 'Orthorhombic', 'spacegroup': 'Cmce', 'lattice_a': 11.04, 'lattice_b': 4.547, 'lattice_c': 3.312, 'melting_point': 44.15, 'note': 'Black phosphorus (orthorhombic)'},
-    'S': {'structure': 'Orthorhombic', 'spacegroup': 'Fddd', 'lattice_a': 10.465, 'lattice_b': 12.870, 'lattice_c': 24.370, 'melting_point': 115.21, 'note': 'α-S, orthorhombic'},
-    'Cl': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -101.5, 'note': 'Gas at STP'},
-    'Ar': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -189.34, 'note': 'Gas at STP'},
-    
-    # Period 4
-    'K': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 5.332, 'melting_point': 63.38, 'note': 'Room temperature'},
-    'Ca': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 5.588, 'melting_point': 842, 'note': 'Room temperature'},
-    'Sc': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.309, 'lattice_c': 5.268, 'melting_point': 1541, 'note': 'Room temperature'},
-    'Ti': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 2.951, 'lattice_c': 4.684, 'melting_point': 1668, 'note': 'α-Ti, room temperature'},
-    'V': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 3.024, 'melting_point': 1910, 'note': 'Room temperature'},
-    'Cr': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 2.884, 'melting_point': 1907, 'note': 'Room temperature'},
-    'Mn': {'structure': 'Complex', 'spacegroup': 'I-43m', 'lattice_a': 8.912, 'melting_point': 1246, 'note': 'α-Mn, complex cubic'},
-    'Fe': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 2.866, 'melting_point': 1538, 'note': 'α-Fe, room temperature'},
-    'Co': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 2.507, 'lattice_c': 4.069, 'melting_point': 1495, 'note': 'α-Co, hcp at room temp'},
-    'Ni': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 3.524, 'melting_point': 1455, 'note': 'Room temperature'},
-    'Cu': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 3.615, 'melting_point': 1084.62, 'note': 'Room temperature'},
-    'Zn': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 2.665, 'lattice_c': 4.947, 'melting_point': 419.53, 'note': 'Room temperature'},
-    'Ga': {'structure': 'Orthorhombic', 'spacegroup': 'Cmce', 'lattice_a': 4.526, 'lattice_b': 4.520, 'lattice_c': 7.659, 'melting_point': 29.76, 'note': 'α-Ga, orthorhombic'},
-    'Ge': {'structure': 'diamond', 'spacegroup': 'Fd-3m', 'lattice_a': 5.658, 'melting_point': 938.25, 'note': 'Room temperature'},
-    'As': {'structure': 'Rhombohedral', 'spacegroup': 'R-3m', 'lattice_a': 4.132, 'lattice_c': 10.939, 'melting_point': 817, 'note': 'α-As, rhombohedral'},
-    'Se': {'structure': 'Trigonal', 'spacegroup': 'P3_121', 'lattice_a': 4.368, 'lattice_c': 4.958, 'melting_point': 221, 'note': 'Trigonal selenium'},
-    'Br': {'structure': 'Liquid', 'spacegroup': None, 'lattice_a': None, 'melting_point': -7.2, 'note': 'Liquid at STP'},
-    'Kr': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -157.36, 'note': 'Gas at STP'},
-    
-    # Period 5
-    'Rb': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 5.710, 'melting_point': 39.30, 'note': 'Room temperature'},
-    'Sr': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 6.080, 'melting_point': 777, 'note': 'Room temperature'},
-    'Y': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.648, 'lattice_c': 5.731, 'melting_point': 1522, 'note': 'Room temperature'},
-    'Zr': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.232, 'lattice_c': 5.147, 'melting_point': 1855, 'note': 'α-Zr, room temperature'},
-    'Nb': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 3.300, 'melting_point': 2477, 'note': 'Room temperature'},
-    'Mo': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 3.147, 'melting_point': 2623, 'note': 'Room temperature'},
-    'Tc': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 2.735, 'lattice_c': 4.390, 'melting_point': 2157, 'note': 'Room temperature (radioactive)'},
-    'Ru': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 2.706, 'lattice_c': 4.282, 'melting_point': 2334, 'note': 'Room temperature'},
-    'Rh': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 3.804, 'melting_point': 1964, 'note': 'Room temperature'},
-    'Pd': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 3.890, 'melting_point': 1554.9, 'note': 'Room temperature'},
-    'Ag': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 4.085, 'melting_point': 961.78, 'note': 'Room temperature'},
-    'Cd': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 2.979, 'lattice_c': 5.618, 'melting_point': 321.07, 'note': 'Room temperature'},
-    'In': {'structure': 'bct', 'spacegroup': 'I4/mmm', 'lattice_a': 3.251, 'lattice_c': 4.947, 'melting_point': 156.60, 'note': 'Room temperature'},
-    'Sn': {'structure': 'diamond', 'spacegroup': 'Fd-3m', 'lattice_a': 6.489, 'melting_point': 231.93, 'note': 'α-Sn (gray tin), <13°C'},
-    'Sb': {'structure': 'Rhombohedral', 'spacegroup': 'R-3m', 'lattice_a': 4.308, 'lattice_c': 11.274, 'melting_point': 630.63, 'note': 'Room temperature'},
-    'Te': {'structure': 'Trigonal', 'spacegroup': 'P3_121', 'lattice_a': 4.457, 'lattice_c': 5.929, 'melting_point': 449.51, 'note': 'Room temperature'},
-    'I': {'structure': 'Orthorhombic', 'spacegroup': 'Cmce', 'lattice_a': 4.796, 'lattice_b': 7.268, 'lattice_c': 9.784, 'melting_point': 113.7, 'note': 'Room temperature'},
-    'Xe': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -111.75, 'note': 'Gas at STP'},
-    
-    # Period 6
-    'Cs': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 6.147, 'melting_point': 28.5, 'note': 'Room temperature'},
-    'Ba': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 5.021, 'melting_point': 727, 'note': 'Room temperature'},
-    'La': {'structure': 'Double_hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.774, 'lattice_c': 12.159, 'melting_point': 920, 'note': 'Double hcp structure'},
-    'Ce': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 5.161, 'melting_point': 798, 'note': 'γ-Ce at room temp'},
-    'Pr': {'structure': 'Double_hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.673, 'lattice_c': 11.835, 'melting_point': 931, 'note': 'Double hcp'},
-    'Nd': {'structure': 'Double_hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.658, 'lattice_c': 11.802, 'melting_point': 1021, 'note': 'Double hcp'},
-    'Pm': {'structure': 'Double_hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.65, 'lattice_c': 11.65, 'melting_point': 1042, 'note': 'Double hcp (radioactive)'},
-    'Sm': {'structure': 'Rhombohedral', 'spacegroup': 'R-3m', 'lattice_a': 3.621, 'lattice_c': 26.25, 'melting_point': 1072, 'note': 'Rhombohedral'},
-    'Eu': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 4.582, 'melting_point': 822, 'note': 'Room temperature'},
-    'Gd': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.636, 'lattice_c': 5.782, 'melting_point': 1313, 'note': 'Room temperature'},
-    'Tb': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.605, 'lattice_c': 5.696, 'melting_point': 1356, 'note': 'Room temperature'},
-    'Dy': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.590, 'lattice_c': 5.654, 'melting_point': 1412, 'note': 'Room temperature'},
-    'Ho': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.578, 'lattice_c': 5.618, 'melting_point': 1474, 'note': 'Room temperature'},
-    'Er': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.559, 'lattice_c': 5.587, 'melting_point': 1529, 'note': 'Room temperature'},
-    'Tm': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.538, 'lattice_c': 5.554, 'melting_point': 1545, 'note': 'Room temperature'},
-    'Yb': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 5.486, 'melting_point': 824, 'note': 'Room temperature'},
-    'Lu': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.503, 'lattice_c': 5.551, 'melting_point': 1663, 'note': 'Room temperature'},
-    'Hf': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.196, 'lattice_c': 5.051, 'melting_point': 2233, 'note': 'α-Hf, room temperature'},
-    'Ta': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 3.306, 'melting_point': 3017, 'note': 'Room temperature'},
-    'W': {'structure': 'bcc', 'spacegroup': 'Im-3m', 'lattice_a': 3.165, 'melting_point': 3414, 'note': 'Room temperature'},
-    'Re': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 2.761, 'lattice_c': 4.458, 'melting_point': 3186, 'note': 'Room temperature'},
-    'Os': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 2.735, 'lattice_c': 4.319, 'melting_point': 3033, 'note': 'Room temperature'},
-    'Ir': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 3.839, 'melting_point': 2466, 'note': 'Room temperature'},
-    'Pt': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 3.924, 'melting_point': 1768, 'note': 'Room temperature'},
-    'Au': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 4.078, 'melting_point': 1064, 'note': 'Room temperature'},
-    'Hg': {'structure': 'Rhombohedral', 'spacegroup': 'R-3m', 'lattice_a': 3.005, 'lattice_c': 6.704, 'melting_point': -38.83, 'note': 'Liquid at RT, rhombohedral solid'},
-    'Tl': {'structure': 'hcp', 'spacegroup': 'P6_3/mmc', 'lattice_a': 3.456, 'lattice_c': 5.525, 'melting_point': 304, 'note': 'β-Tl, hcp at room temp'},
-    'Pb': {'structure': 'fcc', 'spacegroup': 'Fm-3m', 'lattice_a': 4.950, 'melting_point': 327.5, 'note': 'Room temperature'},
-    'Bi': {'structure': 'Rhombohedral', 'spacegroup': 'R-3m', 'lattice_a': 4.746, 'lattice_c': 11.862, 'melting_point': 271.3, 'note': 'Room temperature'},
-    'Po': {'structure': 'sc', 'spacegroup': 'Pm-3m', 'lattice_a': 3.359, 'melting_point': 254, 'note': 'α-Po, simple cubic (radioactive)'},
-    'At': {'structure': 'Unknown', 'spacegroup': None, 'lattice_a': None, 'melting_point': 302, 'note': 'Radioactive, structure uncertain'},
-    'Rn': {'structure': 'Gas', 'spacegroup': None, 'lattice_a': None, 'melting_point': -71, 'note': 'Gas at STP (radioactive)'},
+# ================================================================
+#  Element Phase Data
+#  Key: 'phases' ordered from low to high temperature
+#  'a'/'c' in Angstrom; 'T_min'/'T_max' in Kelvin
+#  References: CRC Handbook, ASM, NIST, Pearson's Crystal Data
+# ================================================================
+
+ELEMENT_PHASE_DATA = {
+    # ================================================================
+    #  Period 1
+    # ================================================================
+    'H':  {'symbol': 'H',  'z': 1,  'phases': [{'structure': 'hcp', 'label': 'H',
+            'a': 3.75, 'c': 6.12, 'T_min': 0, 'T_max': 14, 'note': 'solid H at low T'}], 'Tm': 14},
+    'He': {'symbol': 'He', 'z': 2,  'phases': [{'structure': 'hcp', 'label': 'He',
+            'a': 3.57, 'c': 5.83, 'T_min': 0, 'T_max': 1, 'note': 'under pressure'}], 'Tm': None},
+
+    # ================================================================
+    #  Period 2
+    # ================================================================
+    'Li': {'symbol': 'Li', 'z': 3,  'phases': [
+        {'structure': 'bcc', 'label': 'α-Li', 'a': 3.509, 'T_min': 0, 'T_max': 80, 'note': 'martensitic bcc-hcp near 80K, often ignored'},
+        {'structure': 'bcc', 'label': 'β-Li', 'a': 3.509, 'T_min': 80, 'T_max': 454},
+    ], 'Tm': 454, 'rt_structure': 'bcc'},
+
+    'Be': {'symbol': 'Be', 'z': 4,  'phases': [
+        {'structure': 'hcp', 'label': 'α-Be', 'a': 2.286, 'c': 3.584, 'T_min': 0, 'T_max': 1527},
+        {'structure': 'bcc', 'label': 'β-Be', 'a': 2.55,  'T_min': 1527, 'T_max': 1560},
+    ], 'Tm': 1560, 'rt_structure': 'hcp'},
+
+    'B':  {'symbol': 'B',  'z': 5,  'phases': [{'structure': 'rhombohedral', 'label': 'β-B',
+            'a': 10.93, 'c': 23.79, 'T_min': 0, 'T_max': 2349}], 'Tm': 2349},
+
+    'C':  {'symbol': 'C',  'z': 6,  'phases': [{'structure': 'graphite', 'label': 'C-graphite',
+            'a': 2.464, 'c': 6.711, 'T_min': 0, 'T_max': None, 'note': 'sublimes at ~3915 K'}], 'Tm': None},
+
+    'N':  {'symbol': 'N',  'z': 7,  'phases': [], 'Tm': 63},
+
+    'O':  {'symbol': 'O',  'z': 8,  'phases': [], 'Tm': 55},
+
+    'F':  {'symbol': 'F',  'z': 9,  'phases': [], 'Tm': 54},
+
+    'Ne': {'symbol': 'Ne', 'z': 10, 'phases': [], 'Tm': 25},
+
+    # ================================================================
+    #  Period 3
+    # ================================================================
+    'Na': {'symbol': 'Na', 'z': 11, 'phases': [
+        {'structure': 'bcc', 'label': 'α-Na', 'a': 4.291, 'T_min': 0, 'T_max': 371},
+    ], 'Tm': 371, 'rt_structure': 'bcc'},
+
+    'Mg': {'symbol': 'Mg', 'z': 12, 'phases': [
+        {'structure': 'hcp', 'label': 'Mg', 'a': 3.209, 'c': 5.211, 'T_min': 0, 'T_max': 923},
+    ], 'Tm': 923, 'rt_structure': 'hcp'},
+
+    'Al': {'symbol': 'Al', 'z': 13, 'phases': [
+        {'structure': 'fcc', 'label': 'Al', 'a': 4.050, 'T_min': 0, 'T_max': 933},
+    ], 'Tm': 933, 'rt_structure': 'fcc'},
+
+    'Si': {'symbol': 'Si', 'z': 14, 'phases': [
+        {'structure': 'diamond', 'label': 'Si', 'a': 5.431, 'T_min': 0, 'T_max': 1687},
+    ], 'Tm': 1687, 'rt_structure': 'diamond'},
+
+    'P':  {'symbol': 'P',  'z': 15, 'phases': [], 'Tm': 317},
+
+    'S':  {'symbol': 'S',  'z': 16, 'phases': [], 'Tm': 388},
+
+    'Cl': {'symbol': 'Cl', 'z': 17, 'phases': [], 'Tm': 172},
+
+    'Ar': {'symbol': 'Ar', 'z': 18, 'phases': [], 'Tm': 84},
+
+    # ================================================================
+    #  Period 4
+    # ================================================================
+    'K': {'symbol': 'K', 'z': 19, 'phases': [
+        {'structure': 'bcc', 'label': 'K', 'a': 5.328, 'T_min': 0, 'T_max': 337},
+    ], 'Tm': 337, 'rt_structure': 'bcc'},
+
+    'Ca': {'symbol': 'Ca', 'z': 20, 'phases': [
+        {'structure': 'fcc', 'label': 'α-Ca', 'a': 5.588, 'T_min': 0, 'T_max': 716},
+        {'structure': 'bcc', 'label': 'β-Ca', 'a': 4.485, 'T_min': 716, 'T_max': 1115},
+    ], 'Tm': 1115, 'rt_structure': 'fcc'},
+
+    'Sc': {'symbol': 'Sc', 'z': 21, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Sc', 'a': 3.309, 'c': 5.268, 'T_min': 0, 'T_max': 1610},
+        {'structure': 'bcc', 'label': 'β-Sc', 'a': 3.73,  'T_min': 1610, 'T_max': 1814},
+    ], 'Tm': 1814, 'rt_structure': 'hcp'},
+
+    'Ti': {'symbol': 'Ti', 'z': 22, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Ti', 'a': 2.951, 'c': 4.686, 'T_min': 0, 'T_max': 1155},
+        {'structure': 'bcc', 'label': 'β-Ti', 'a': 3.307, 'T_min': 1155, 'T_max': 1941},
+    ], 'Tm': 1941, 'rt_structure': 'hcp'},
+
+    'V': {'symbol': 'V', 'z': 23, 'phases': [
+        {'structure': 'bcc', 'label': 'V', 'a': 3.027, 'T_min': 0, 'T_max': 2183},
+    ], 'Tm': 2183, 'rt_structure': 'bcc'},
+
+    'Cr': {'symbol': 'Cr', 'z': 24, 'phases': [
+        {'structure': 'bcc', 'label': 'Cr', 'a': 2.885, 'T_min': 0, 'T_max': 2180},
+    ], 'Tm': 2180, 'rt_structure': 'bcc', 'magnetic': {'type': 'antiferromagnetic', 'TN': 311}},
+
+    'Mn': {'symbol': 'Mn', 'z': 25, 'phases': [
+        {'structure': 'cbcc', 'label': 'α-Mn', 'a': 8.915, 'T_min': 0, 'T_max': 1000, 'note': 'complex bcc, 58 atoms/cell'},
+        {'structure': 'cpcc', 'label': 'β-Mn', 'a': 6.315, 'T_min': 1000, 'T_max': 1368, 'note': 'primitive cubic, 20 atoms/cell'},
+        {'structure': 'fcc',  'label': 'γ-Mn', 'a': 3.86,  'T_min': 1368, 'T_max': 1406},
+        {'structure': 'bcc',  'label': 'δ-Mn', 'a': 3.08,  'T_min': 1406, 'T_max': 1519},
+    ], 'Tm': 1519, 'rt_structure': 'cbcc'},
+
+    'Fe': {'symbol': 'Fe', 'z': 26, 'phases': [
+        {'structure': 'bcc', 'label': 'α-Fe', 'a': 2.866, 'T_min': 0, 'T_max': 1185},
+        {'structure': 'fcc', 'label': 'γ-Fe', 'a': 3.647, 'T_min': 1185, 'T_max': 1667},
+        {'structure': 'bcc', 'label': 'δ-Fe', 'a': 2.93,  'T_min': 1667, 'T_max': 1811},
+    ], 'Tm': 1811, 'rt_structure': 'bcc', 'magnetic': {'type': 'ferromagnetic', 'Tc': 1043}},
+
+    'Co': {'symbol': 'Co', 'z': 27, 'phases': [
+        {'structure': 'hcp', 'label': 'ε-Co', 'a': 2.507, 'c': 4.070, 'T_min': 0, 'T_max': 695},
+        {'structure': 'fcc', 'label': 'α-Co', 'a': 3.544, 'T_min': 695, 'T_max': 1768},
+    ], 'Tm': 1768, 'rt_structure': 'hcp', 'magnetic': {'type': 'ferromagnetic', 'Tc': 1388}},
+
+    'Ni': {'symbol': 'Ni', 'z': 28, 'phases': [
+        {'structure': 'fcc', 'label': 'Ni', 'a': 3.524, 'T_min': 0, 'T_max': 1728},
+    ], 'Tm': 1728, 'rt_structure': 'fcc', 'magnetic': {'type': 'ferromagnetic', 'Tc': 627}},
+
+    'Cu': {'symbol': 'Cu', 'z': 29, 'phases': [
+        {'structure': 'fcc', 'label': 'Cu', 'a': 3.615, 'T_min': 0, 'T_max': 1358},
+    ], 'Tm': 1358, 'rt_structure': 'fcc'},
+
+    'Zn': {'symbol': 'Zn', 'z': 30, 'phases': [
+        {'structure': 'hcp', 'label': 'Zn', 'a': 2.665, 'c': 4.947, 'T_min': 0, 'T_max': 693},
+    ], 'Tm': 693, 'rt_structure': 'hcp'},
+
+    'Ga': {'symbol': 'Ga', 'z': 31, 'phases': [{'structure': 'orthorhombic', 'label': 'α-Ga',
+            'a': 4.526, 'b': 4.520, 'c': 7.659, 'T_min': 0, 'T_max': 303}], 'Tm': 303},
+
+    'Ge': {'symbol': 'Ge', 'z': 32, 'phases': [
+        {'structure': 'diamond', 'label': 'Ge', 'a': 5.658, 'T_min': 0, 'T_max': 1211},
+    ], 'Tm': 1211, 'rt_structure': 'diamond'},
+
+    'As': {'symbol': 'As', 'z': 33, 'phases': [{'structure': 'rhombohedral', 'label': 'As',
+            'a': 4.132, 'c': 10.939, 'T_min': 0, 'T_max': 1090, 'note': 'sublimes'}], 'Tm': None},
+
+    'Se': {'symbol': 'Se', 'z': 34, 'phases': [], 'Tm': 494},
+
+    'Br': {'symbol': 'Br', 'z': 35, 'phases': [], 'Tm': 266},
+
+    'Kr': {'symbol': 'Kr', 'z': 36, 'phases': [], 'Tm': 116},
+
+    # ================================================================
+    #  Period 5
+    # ================================================================
+    'Rb': {'symbol': 'Rb', 'z': 37, 'phases': [
+        {'structure': 'bcc', 'label': 'Rb', 'a': 5.710, 'T_min': 0, 'T_max': 312},
+    ], 'Tm': 312, 'rt_structure': 'bcc'},
+
+    'Sr': {'symbol': 'Sr', 'z': 38, 'phases': [
+        {'structure': 'fcc', 'label': 'α-Sr', 'a': 6.085, 'T_min': 0, 'T_max': 830},
+        {'structure': 'bcc', 'label': 'β-Sr', 'a': 4.87,  'T_min': 830, 'T_max': 1050},
+    ], 'Tm': 1050, 'rt_structure': 'fcc'},
+
+    'Y': {'symbol': 'Y', 'z': 39, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Y', 'a': 3.647, 'c': 5.731, 'T_min': 0, 'T_max': 1755},
+        {'structure': 'bcc', 'label': 'β-Y', 'a': 4.10,  'T_min': 1755, 'T_max': 1799},
+    ], 'Tm': 1799, 'rt_structure': 'hcp'},
+
+    'Zr': {'symbol': 'Zr', 'z': 40, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Zr', 'a': 3.232, 'c': 5.148, 'T_min': 0, 'T_max': 1136},
+        {'structure': 'bcc', 'label': 'β-Zr', 'a': 3.609, 'T_min': 1136, 'T_max': 2128},
+    ], 'Tm': 2128, 'rt_structure': 'hcp'},
+
+    'Nb': {'symbol': 'Nb', 'z': 41, 'phases': [
+        {'structure': 'bcc', 'label': 'Nb', 'a': 3.300, 'T_min': 0, 'T_max': 2750},
+    ], 'Tm': 2750, 'rt_structure': 'bcc'},
+
+    'Mo': {'symbol': 'Mo', 'z': 42, 'phases': [
+        {'structure': 'bcc', 'label': 'Mo', 'a': 3.147, 'T_min': 0, 'T_max': 2896},
+    ], 'Tm': 2896, 'rt_structure': 'bcc'},
+
+    'Tc': {'symbol': 'Tc', 'z': 43, 'phases': [
+        {'structure': 'hcp', 'label': 'Tc', 'a': 2.737, 'c': 4.391, 'T_min': 0, 'T_max': 2430},
+    ], 'Tm': 2430, 'rt_structure': 'hcp'},
+
+    'Ru': {'symbol': 'Ru', 'z': 44, 'phases': [
+        {'structure': 'hcp', 'label': 'Ru', 'a': 2.706, 'c': 4.282, 'T_min': 0, 'T_max': 2607},
+    ], 'Tm': 2607, 'rt_structure': 'hcp'},
+
+    'Rh': {'symbol': 'Rh', 'z': 45, 'phases': [
+        {'structure': 'fcc', 'label': 'Rh', 'a': 3.803, 'T_min': 0, 'T_max': 2237},
+    ], 'Tm': 2237, 'rt_structure': 'fcc'},
+
+    'Pd': {'symbol': 'Pd', 'z': 46, 'phases': [
+        {'structure': 'fcc', 'label': 'Pd', 'a': 3.891, 'T_min': 0, 'T_max': 1828},
+    ], 'Tm': 1828, 'rt_structure': 'fcc'},
+
+    'Ag': {'symbol': 'Ag', 'z': 47, 'phases': [
+        {'structure': 'fcc', 'label': 'Ag', 'a': 4.085, 'T_min': 0, 'T_max': 1235},
+    ], 'Tm': 1235, 'rt_structure': 'fcc'},
+
+    'Cd': {'symbol': 'Cd', 'z': 48, 'phases': [
+        {'structure': 'hcp', 'label': 'Cd', 'a': 2.979, 'c': 5.619, 'T_min': 0, 'T_max': 594},
+    ], 'Tm': 594, 'rt_structure': 'hcp'},
+
+    'In': {'symbol': 'In', 'z': 49, 'phases': [
+        {'structure': 'bct',  'label': 'In', 'a': 3.252, 'c': 4.946, 'T_min': 0, 'T_max': 430},
+    ], 'Tm': 430, 'rt_structure': 'bct'},
+
+    'Sn': {'symbol': 'Sn', 'z': 50, 'phases': [
+        {'structure': 'diamond', 'label': 'α-Sn', 'a': 6.489, 'T_min': 0, 'T_max': 286, 'note': 'gray tin, semiconductor'},
+        {'structure': 'bct',     'label': 'β-Sn', 'a': 5.832, 'c': 3.181, 'T_min': 286, 'T_max': 505, 'note': 'white tin, metallic'},
+    ], 'Tm': 505, 'rt_structure': 'bct'},
+
+    'Sb': {'symbol': 'Sb', 'z': 51, 'phases': [{'structure': 'rhombohedral', 'label': 'Sb',
+            'a': 4.308, 'c': 11.274, 'T_min': 0, 'T_max': 904}], 'Tm': 904},
+
+    'Te': {'symbol': 'Te', 'z': 52, 'phases': [], 'Tm': 723},
+
+    'I':  {'symbol': 'I',  'z': 53, 'phases': [], 'Tm': 387},
+
+    'Xe': {'symbol': 'Xe', 'z': 54, 'phases': [], 'Tm': 161},
+
+    # ================================================================
+    #  Period 6
+    # ================================================================
+    'Cs': {'symbol': 'Cs', 'z': 55, 'phases': [
+        {'structure': 'bcc', 'label': 'Cs', 'a': 6.141, 'T_min': 0, 'T_max': 302},
+    ], 'Tm': 302, 'rt_structure': 'bcc'},
+
+    'Ba': {'symbol': 'Ba', 'z': 56, 'phases': [
+        {'structure': 'bcc', 'label': 'Ba', 'a': 5.023, 'T_min': 0, 'T_max': 1000},
+    ], 'Tm': 1000, 'rt_structure': 'bcc'},
+
+    'La': {'symbol': 'La', 'z': 57, 'phases': [
+        {'structure': 'dhcp', 'label': 'α-La', 'a': 3.774, 'c': 12.171, 'T_min': 0, 'T_max': 613},
+        {'structure': 'fcc',  'label': 'β-La', 'a': 5.303, 'T_min': 613, 'T_max': 1138},
+        {'structure': 'bcc',  'label': 'γ-La', 'a': 4.26,  'T_min': 1138, 'T_max': 1193},
+    ], 'Tm': 1193, 'rt_structure': 'dhcp'},
+
+    'Ce': {'symbol': 'Ce', 'z': 58, 'phases': [
+        {'structure': 'dhcp', 'label': 'β-Ce', 'a': 3.681, 'c': 11.857, 'T_min': 0, 'T_max': 280},
+        {'structure': 'fcc',  'label': 'γ-Ce', 'a': 5.161, 'T_min': 280, 'T_max': 999},
+        {'structure': 'bcc',  'label': 'δ-Ce', 'a': 4.12,  'T_min': 999, 'T_max': 1068},
+    ], 'Tm': 1068, 'rt_structure': 'dhcp', 'note': 'γ→β at ~280K; α-Ce (collapsed fcc) appears below ~116K'},
+
+    'Pr': {'symbol': 'Pr', 'z': 59, 'phases': [
+        {'structure': 'dhcp', 'label': 'α-Pr', 'a': 3.673, 'c': 11.835, 'T_min': 0, 'T_max': 1068},
+        {'structure': 'bcc',  'label': 'β-Pr', 'a': 4.13,  'T_min': 1068, 'T_max': 1208},
+    ], 'Tm': 1208, 'rt_structure': 'dhcp'},
+
+    'Nd': {'symbol': 'Nd', 'z': 60, 'phases': [
+        {'structure': 'dhcp', 'label': 'α-Nd', 'a': 3.658, 'c': 11.799, 'T_min': 0, 'T_max': 1136},
+        {'structure': 'bcc',  'label': 'β-Nd', 'a': 4.13,  'T_min': 1136, 'T_max': 1297},
+    ], 'Tm': 1297, 'rt_structure': 'dhcp'},
+
+    'Pm': {'symbol': 'Pm', 'z': 61, 'phases': [
+        {'structure': 'dhcp', 'label': 'α-Pm', 'a': 3.65,  'c': 11.65,  'T_min': 0, 'T_max': 1163},
+        {'structure': 'bcc',  'label': 'β-Pm', 'a': 4.10,  'T_min': 1163, 'T_max': 1315},
+    ], 'Tm': 1315, 'rt_structure': 'dhcp'},
+
+    'Sm': {'symbol': 'Sm', 'z': 62, 'phases': [
+        {'structure': 'rhombohedral', 'label': 'α-Sm', 'a': 3.629, 'c': 26.207, 'T_min': 0, 'T_max': 1007, 'note': '9R Sm-type'},
+        {'structure': 'bcc',          'label': 'β-Sm', 'a': 4.07,  'T_min': 1007, 'T_max': 1345},
+    ], 'Tm': 1345, 'rt_structure': 'rhombohedral'},
+
+    'Eu': {'symbol': 'Eu', 'z': 63, 'phases': [
+        {'structure': 'bcc', 'label': 'Eu', 'a': 4.581, 'T_min': 0, 'T_max': 1099},
+    ], 'Tm': 1099, 'rt_structure': 'bcc'},
+
+    'Gd': {'symbol': 'Gd', 'z': 64, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Gd', 'a': 3.634, 'c': 5.781, 'T_min': 0, 'T_max': 1508},
+        {'structure': 'bcc', 'label': 'β-Gd', 'a': 4.06,  'T_min': 1508, 'T_max': 1585},
+    ], 'Tm': 1585, 'rt_structure': 'hcp', 'magnetic': {'type': 'ferromagnetic', 'Tc': 293}},
+
+    'Tb': {'symbol': 'Tb', 'z': 65, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Tb', 'a': 3.605, 'c': 5.696, 'T_min': 0, 'T_max': 1562},
+        {'structure': 'bcc', 'label': 'β-Tb', 'a': 4.02,  'T_min': 1562, 'T_max': 1629},
+    ], 'Tm': 1629, 'rt_structure': 'hcp'},
+
+    'Dy': {'symbol': 'Dy', 'z': 66, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Dy', 'a': 3.590, 'c': 5.654, 'T_min': 0, 'T_max': 1654},
+        {'structure': 'bcc', 'label': 'β-Dy', 'a': 4.03,  'T_min': 1654, 'T_max': 1680},
+    ], 'Tm': 1680, 'rt_structure': 'hcp'},
+
+    'Ho': {'symbol': 'Ho', 'z': 67, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Ho', 'a': 3.578, 'c': 5.618, 'T_min': 0, 'T_max': 1701},
+        {'structure': 'bcc', 'label': 'β-Ho', 'a': 3.96,  'T_min': 1701, 'T_max': 1734},
+    ], 'Tm': 1734, 'rt_structure': 'hcp'},
+
+    'Er': {'symbol': 'Er', 'z': 68, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Er', 'a': 3.559, 'c': 5.587, 'T_min': 0, 'T_max': 1695},
+        {'structure': 'bcc', 'label': 'β-Er', 'a': 3.94,  'T_min': 1695, 'T_max': 1802},
+    ], 'Tm': 1802, 'rt_structure': 'hcp'},
+
+    'Tm': {'symbol': 'Tm', 'z': 69, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Tm', 'a': 3.538, 'c': 5.554, 'T_min': 0, 'T_max': 1731},
+        {'structure': 'bcc', 'label': 'β-Tm', 'a': 3.85,  'T_min': 1731, 'T_max': 1818},
+    ], 'Tm': 1818, 'rt_structure': 'hcp'},
+
+    'Yb': {'symbol': 'Yb', 'z': 70, 'phases': [
+        {'structure': 'fcc', 'label': 'α-Yb', 'a': 5.486, 'T_min': 0, 'T_max': 1033},
+        {'structure': 'bcc', 'label': 'β-Yb', 'a': 4.45,  'T_min': 1033, 'T_max': 1097},
+    ], 'Tm': 1097, 'rt_structure': 'fcc'},
+
+    'Lu': {'symbol': 'Lu', 'z': 71, 'phases': [
+        {'structure': 'hcp', 'label': 'Lu', 'a': 3.503, 'c': 5.551, 'T_min': 0, 'T_max': 1925},
+    ], 'Tm': 1925, 'rt_structure': 'hcp'},
+
+    'Hf': {'symbol': 'Hf', 'z': 72, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Hf', 'a': 3.196, 'c': 5.051, 'T_min': 0, 'T_max': 2020},
+        {'structure': 'bcc', 'label': 'β-Hf', 'a': 3.60,  'T_min': 2020, 'T_max': 2506},
+    ], 'Tm': 2506, 'rt_structure': 'hcp'},
+
+    'Ta': {'symbol': 'Ta', 'z': 73, 'phases': [
+        {'structure': 'bcc', 'label': 'Ta', 'a': 3.301, 'T_min': 0, 'T_max': 3290},
+    ], 'Tm': 3290, 'rt_structure': 'bcc'},
+
+    'W': {'symbol': 'W', 'z': 74, 'phases': [
+        {'structure': 'bcc', 'label': 'W', 'a': 3.165, 'T_min': 0, 'T_max': 3695},
+    ], 'Tm': 3695, 'rt_structure': 'bcc'},
+
+    'Re': {'symbol': 'Re', 'z': 75, 'phases': [
+        {'structure': 'hcp', 'label': 'Re', 'a': 2.760, 'c': 4.458, 'T_min': 0, 'T_max': 3459},
+    ], 'Tm': 3459, 'rt_structure': 'hcp'},
+
+    'Os': {'symbol': 'Os', 'z': 76, 'phases': [
+        {'structure': 'hcp', 'label': 'Os', 'a': 2.734, 'c': 4.320, 'T_min': 0, 'T_max': 3306},
+    ], 'Tm': 3306, 'rt_structure': 'hcp'},
+
+    'Ir': {'symbol': 'Ir', 'z': 77, 'phases': [
+        {'structure': 'fcc', 'label': 'Ir', 'a': 3.839, 'T_min': 0, 'T_max': 2719},
+    ], 'Tm': 2719, 'rt_structure': 'fcc'},
+
+    'Pt': {'symbol': 'Pt', 'z': 78, 'phases': [
+        {'structure': 'fcc', 'label': 'Pt', 'a': 3.924, 'T_min': 0, 'T_max': 2041},
+    ], 'Tm': 2041, 'rt_structure': 'fcc'},
+
+    'Au': {'symbol': 'Au', 'z': 79, 'phases': [
+        {'structure': 'fcc', 'label': 'Au', 'a': 4.078, 'T_min': 0, 'T_max': 1337},
+    ], 'Tm': 1337, 'rt_structure': 'fcc'},
+
+    'Hg': {'symbol': 'Hg', 'z': 80, 'phases': [{'structure': 'rhombohedral', 'label': 'Hg',
+            'a': 3.005, 'c': 6.704, 'T_min': 0, 'T_max': 234}], 'Tm': 234},
+
+    'Tl': {'symbol': 'Tl', 'z': 81, 'phases': [
+        {'structure': 'hcp', 'label': 'α-Tl', 'a': 3.457, 'c': 5.525, 'T_min': 0, 'T_max': 507},
+        {'structure': 'bcc', 'label': 'β-Tl', 'a': 3.88,  'T_min': 507, 'T_max': 577},
+    ], 'Tm': 577, 'rt_structure': 'hcp'},
+
+    'Pb': {'symbol': 'Pb', 'z': 82, 'phases': [
+        {'structure': 'fcc', 'label': 'Pb', 'a': 4.951, 'T_min': 0, 'T_max': 601},
+    ], 'Tm': 601, 'rt_structure': 'fcc'},
+
+    'Bi': {'symbol': 'Bi', 'z': 83, 'phases': [{'structure': 'rhombohedral', 'label': 'Bi',
+            'a': 4.746, 'c': 11.862, 'T_min': 0, 'T_max': 545}], 'Tm': 545},
+
+    'Po': {'symbol': 'Po', 'z': 84, 'phases': [
+        {'structure': 'sc', 'label': 'α-Po', 'a': 3.359, 'T_min': 0, 'T_max': 309},
+        {'structure': 'rhombohedral', 'label': 'β-Po', 'a': 3.366, 'T_min': 309, 'T_max': 527},
+    ], 'Tm': 527, 'rt_structure': 'sc'},
+
+    'At': {'symbol': 'At', 'z': 85, 'phases': [], 'Tm': 575},
+
+    'Rn': {'symbol': 'Rn', 'z': 86, 'phases': [], 'Tm': 202},
+
+    # ================================================================
+    #  Period 7
+    # ================================================================
+    'Fr': {'symbol': 'Fr', 'z': 87, 'phases': [
+        {'structure': 'bcc', 'label': 'Fr', 'a': 5.64, 'T_min': 0, 'T_max': 300},
+    ], 'Tm': 300, 'rt_structure': 'bcc'},
+
+    'Ra': {'symbol': 'Ra', 'z': 88, 'phases': [
+        {'structure': 'bcc', 'label': 'Ra', 'a': 5.148, 'T_min': 0, 'T_max': 973},
+    ], 'Tm': 973, 'rt_structure': 'bcc'},
+
+    'Ac': {'symbol': 'Ac', 'z': 89, 'phases': [
+        {'structure': 'fcc', 'label': 'Ac', 'a': 5.311, 'T_min': 0, 'T_max': 1323},
+    ], 'Tm': 1323, 'rt_structure': 'fcc'},
+
+    'Th': {'symbol': 'Th', 'z': 90, 'phases': [
+        {'structure': 'fcc', 'label': 'α-Th', 'a': 5.084, 'T_min': 0, 'T_max': 1633},
+        {'structure': 'bcc', 'label': 'β-Th', 'a': 4.11,  'T_min': 1633, 'T_max': 2023},
+    ], 'Tm': 2023, 'rt_structure': 'fcc'},
+
+    'Pa': {'symbol': 'Pa', 'z': 91, 'phases': [
+        {'structure': 'tetragonal', 'label': 'α-Pa', 'a': 3.929, 'c': 3.238, 'T_min': 0, 'T_max': 1443},
+        {'structure': 'bcc',       'label': 'β-Pa', 'a': 3.81,  'T_min': 1443, 'T_max': 1841},
+    ], 'Tm': 1841, 'rt_structure': 'tetragonal'},
+
+    'U': {'symbol': 'U', 'z': 92, 'phases': [
+        {'structure': 'orthorhombic', 'label': 'α-U', 'a': 2.854, 'b': 5.870, 'c': 4.955, 'T_min': 0, 'T_max': 941},
+        {'structure': 'tetragonal',   'label': 'β-U', 'a': 10.758, 'c': 5.656, 'T_min': 941, 'T_max': 1049, 'note': '30 atoms/cell'},
+        {'structure': 'bcc',          'label': 'γ-U', 'a': 3.524, 'T_min': 1049, 'T_max': 1408},
+    ], 'Tm': 1408, 'rt_structure': 'orthorhombic'},
+
+    'Np': {'symbol': 'Np', 'z': 93, 'phases': [
+        {'structure': 'orthorhombic', 'label': 'α-Np', 'a': 6.663, 'b': 4.723, 'c': 4.887, 'T_min': 0, 'T_max': 553},
+        {'structure': 'tetragonal',   'label': 'β-Np', 'a': 4.887, 'c': 3.389, 'T_min': 553, 'T_max': 849},
+        {'structure': 'bcc',          'label': 'γ-Np', 'a': 3.52,  'T_min': 849, 'T_max': 917},
+    ], 'Tm': 917, 'rt_structure': 'orthorhombic'},
+
+    'Pu': {'symbol': 'Pu', 'z': 94, 'phases': [
+        {'structure': 'monoclinic',    'label': 'α-Pu',  'a': 6.183, 'b': 4.822, 'c': 10.963, 'T_min': 0, 'T_max': 395, 'note': '16 atoms/cell'},
+        {'structure': 'monoclinic',    'label': 'β-Pu',  'a': 9.284, 'b': 10.463, 'c': 7.859, 'T_min': 395, 'T_max': 479, 'note': '34 atoms/cell'},
+        {'structure': 'orthorhombic',  'label': 'γ-Pu',  'a': 3.159, 'b': 5.768, 'c': 10.162, 'T_min': 479, 'T_max': 487},
+        {'structure': 'fcc',           'label': 'δ-Pu',  'a': 4.637, 'T_min': 487, 'T_max': 593},
+        {'structure': 'bct',           'label': 'δ-Pu', 'a': 3.340, 'c': 4.447, 'T_min': 593, 'T_max': 736},
+        {'structure': 'bcc',           'label': 'ε-Pu',  'a': 3.638, 'T_min': 736, 'T_max': 913},
+    ], 'Tm': 913, 'rt_structure': 'monoclinic', 'note': '6 allotropes, most of any element'},
+
+    'Am': {'symbol': 'Am', 'z': 95, 'phases': [
+        {'structure': 'dhcp', 'label': 'α-Am', 'a': 3.468, 'c': 11.248, 'T_min': 0, 'T_max': 1042},
+        {'structure': 'fcc',  'label': 'β-Am', 'a': 4.89,  'T_min': 1042, 'T_max': 1449},
+    ], 'Tm': 1449, 'rt_structure': 'dhcp'},
+
+    'Cm': {'symbol': 'Cm', 'z': 96, 'phases': [
+        {'structure': 'dhcp', 'label': 'α-Cm', 'a': 3.496, 'c': 11.331, 'T_min': 0, 'T_max': 1550},
+        {'structure': 'fcc',  'label': 'β-Cm', 'a': 4.382, 'T_min': 1550, 'T_max': 1613},
+    ], 'Tm': 1613, 'rt_structure': 'dhcp'},
 }
 
 
+# ================================================================
+#  Legacy / derived: ELEMENTS_BY_STRUCTURE (room-temperature phase only)
+# ================================================================
+
+def _build_elements_by_structure():
+    """Build ELEMENTS_BY_STRUCTURE from ELEMENT_PHASE_DATA using rt_structure."""
+    result = {}
+    for sym, data in ELEMENT_PHASE_DATA.items():
+        rt = data.get('rt_structure')
+        if rt and data.get('phases') and len(data['phases']) > 0:
+            if rt not in result:
+                result[rt] = []
+            result[rt].append(sym)
+    return result
+
+ELEMENTS_BY_STRUCTURE = _build_elements_by_structure()
+
+# ================================================================
+#  Structure generation functions
+# ================================================================
+
+LATTICE_CONSTANTS = {
+    ('Sn', 'diamond'): (6.489,),
+    ('In', 'bct'): (3.252, 4.946),
+}
+
+ELEMENT_PRIMITIVE_ATOMS = {
+    'fcc': 4,
+    'bcc': 2,
+    'hcp': 2,
+    'dhcp': 4,
+    'diamond': 8,
+    'sc': 1,
+    'bct': 2,
+}
+
+
+
+def _get_lattice_from_data(symbol, structure_type):
+    """Look up lattice constants from ELEMENT_PHASE_DATA."""
+    data = ELEMENT_PHASE_DATA.get(symbol, {})
+    for phase in data.get("phases", []):
+        if phase["structure"] == structure_type:
+            a = phase.get("a")
+            c = phase.get("c")
+            if c:
+                return (a, c)
+            return (a,)
+    raise ValueError(f"{symbol} {structure_type} not in ELEMENT_PHASE_DATA")
 def _get_mass_map(type_map):
 
     mass_map_ref = {

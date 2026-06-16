@@ -1,14 +1,9 @@
-import os  
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-import time
 import glob
-import dpdata
-import json
 
-from monty.serialization import loadfn,dumpfn
 from scipy.optimize import curve_fit
-from scipy.signal import savgol_filter
 
 #plt.rcParams['xtick.direction'] = 'in'
 #plt.rcParams['ytick.direction'] = 'in'

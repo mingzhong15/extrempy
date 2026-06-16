@@ -1,6 +1,8 @@
-
-from extrempy.constant import *
+import numpy as np
+import os
+import glob
 import json
+
 from .base import InputGenerator
 
 class DPKITGenerator(InputGenerator):

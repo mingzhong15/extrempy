@@ -5,10 +5,7 @@ from tqdm import tqdm
 import polars as pl
 import numpy as np
 
-try:
-    from extrempy.constant import *
-except:
-    from ..constant import *
+import glob
 
 
 def generate_even_func(data: np.ndarray) -> np.ndarray:
