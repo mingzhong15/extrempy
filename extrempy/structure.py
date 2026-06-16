@@ -525,6 +525,7 @@ def _get_lattice_from_data(symbol, structure_type):
 def generate_element_structure(element,
                                output_dir="structures",
                                target_atoms=100,
+                               supercell=None,
                                structure_type=None,
                                verbose=True):
     """
@@ -535,6 +536,11 @@ def generate_element_structure(element,
     element : str
     output_dir : str
     target_atoms : int
+        Target number of atoms (used when supercell is None).
+    supercell : int or tuple or None
+        Supercell dimensions. If int, use as n x n x n.
+        If tuple (nx, ny, nz), use as anisotropic supercell.
+        If None, compute from target_atoms.
     structure_type : str or None
         One of: 'fcc', 'bcc', 'hcp', 'diamond', 'sc', 'bct', 'dhcp'
         If None, auto-detect from ELEMENT_PHASE_DATA rt_structure
@@ -546,24 +552,29 @@ def generate_element_structure(element,
     poscar_path : str
     """
     if structure_type is None:
-        # Use rt_structure from ELEMENT_PHASE_DATA
         rt = ELEMENT_PHASE_DATA.get(element, {}).get('rt_structure')
         if rt:
             structure_type = rt
         else:
             structure_type = 'fcc'
 
+    if supercell is None:
+        use_supercell = None
+    elif isinstance(supercell, int):
+        use_supercell = (supercell, supercell, supercell)
+    elif isinstance(supercell, (tuple, list)) and len(supercell) == 3:
+        use_supercell = tuple(supercell)
+    else:
+        raise ValueError(f"supercell must be int or tuple of length 3, got {supercell}")
+
     lattice_key = (element, structure_type)
     has_custom_lattice = lattice_key in LATTICE_CONSTANTS
 
     if structure_type == 'dhcp':
-        # dhcp: ABAC stacking, 4 atoms per unit cell
-        # Use hcp primitive and double c-axis
         if has_custom_lattice:
             a, c4 = LATTICE_CONSTANTS[lattice_key]
-            c = c4 / 2  # per layer
+            c = c4 / 2
         else:
-            # Get from ELEMENT_PHASE_DATA
             rt_phase = ELEMENT_PHASE_DATA.get(element, {}).get('phases', [{}])[0]
             a = rt_phase.get('a', 3.5)
             c4 = rt_phase.get('c', 11.8)
@@ -571,28 +582,27 @@ def generate_element_structure(element,
 
         atoms = bulk(element, 'hcp', a=a, c=c)
 
-        # Build supercell with 4-layer dhcp stacking
-        # hcp uses 2-layer AB, we need 4-layer ABAC
-        # Simplification: just double the z-axis to get 4 atoms/cell
         supercell_matrix = np.eye(3, dtype=int)
         supercell_matrix[2, 2] = 2
         atoms = make_supercell(atoms, supercell_matrix)
 
-        # Adjust positions for ABAC stacking
         pos = atoms.get_positions()
         cell = atoms.get_cell()
         frac = pos @ np.linalg.inv(cell)
-        # For atoms originally at z~0.25 (layer B), shift to z~0.75 (layer C)
         for i in range(len(atoms)):
             if 0.4 < frac[i, 2] < 0.6:
-                pass  # keep A and C layers
+                pass
         atoms.set_positions(frac @ cell)
 
-        # Target atom count
-        primitive_atoms = 4  # ABAC = 4 layers
-        n = int(np.floor((target_atoms / primitive_atoms) ** (1 / 3)))
-        n = max(1, n)
-        supercell_matrix = np.array([[n, 0, 0], [0, n, 0], [0, 0, max(1, n // 2)]], dtype=int)
+        if use_supercell is not None:
+            nx, ny, nz = use_supercell
+        else:
+            primitive_atoms = 4
+            n = int(np.floor((target_atoms / primitive_atoms) ** (1 / 3)))
+            n = max(1, n)
+            nx = ny = n
+            nz = max(1, n // 2)
+        supercell_matrix = np.diag([nx, ny, nz])
         atoms = make_supercell(atoms, supercell_matrix)
 
     elif structure_type in ('fcc', 'bcc', 'diamond', 'sc'):
@@ -621,21 +631,26 @@ def generate_element_structure(element,
     else:
         raise ValueError(f"Unsupported structure type: {structure_type}")
 
-    primitive_atoms = ELEMENT_PRIMITIVE_ATOMS.get(structure_type, 2)
+    if use_supercell is not None and structure_type != 'dhcp':
+        _supercell_matrix = np.diag(use_supercell)
+        supercell = make_supercell(atoms, _supercell_matrix)
+    else:
+        primitive_atoms = ELEMENT_PRIMITIVE_ATOMS.get(structure_type, 2)
 
-    n = int(np.floor((target_atoms / primitive_atoms) ** (1 / 3)))
-    n = max(1, n)
-    supercell_matrix = np.eye(3, dtype=int) * n
-
-    supercell = make_supercell(atoms, supercell_matrix)
-    n_atoms = len(supercell)
-
-    if n_atoms > target_atoms and structure_type in ('fcc', 'bcc', 'diamond', 'sc', 'bct'):
         n = int(np.floor((target_atoms / primitive_atoms) ** (1 / 3)))
         n = max(1, n)
-        supercell_matrix = np.eye(3, dtype=int) * n
-        supercell = make_supercell(atoms, supercell_matrix)
+        _supercell_matrix = np.eye(3, dtype=int) * n
+
+        supercell = make_supercell(atoms, _supercell_matrix)
         n_atoms = len(supercell)
+
+        if n_atoms > target_atoms and structure_type in ('fcc', 'bcc', 'diamond', 'sc', 'bct'):
+            n = int(np.floor((target_atoms / primitive_atoms) ** (1 / 3)))
+            n = max(1, n)
+            _supercell_matrix = np.eye(3, dtype=int) * n
+            supercell = make_supercell(atoms, _supercell_matrix)
+
+    n_atoms = len(supercell)
 
     os.makedirs(output_dir, exist_ok=True)
     poscar_path = os.path.join(output_dir, f"{element}-{structure_type.upper()}.POSCAR")
