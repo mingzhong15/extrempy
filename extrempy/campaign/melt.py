@@ -1,10 +1,11 @@
 import os
 import glob
+import json
+import subprocess
 import numpy as np
 
 from extrempy.lazy.lammps import LAMMPSGenerator
 from extrempy.lazy.lib import _get_mass_map, ELEMENT_PHASE_DATA
-from extrempy.constant import kb, NA, m2A, s2ps
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 
@@ -29,37 +30,87 @@ class EOSCalculator:
     ----------
     work_root : str
         Root directory for all element data.
-    poscar_dir : str
-        Directory containing POSCAR files (``{element}-*POSCAR``).
-    pot_root_dir : str
-        Root directory containing ``{element}_sample/iter.*/00.train/000/``
-        with ``frozen_model.pb``.
+    dpgen_dir : str or None
+        DPGEN project root.  Auto-discovers DP model from
+        ``{dpgen_dir}/{element}_sample/iter.*/00.train/000/`` and POSCAR
+        from ``{dpgen_dir}/{element}/confs/*.POSCAR``.
+    dp_model_path : str or None
+        Explicit path to ``frozen_model.pb``.  Overrides all other search.
+    poscar_path : str or None
+        Explicit path to a POSCAR file.  Overrides all other search.
+    poscar_dir : str or None
+        Directory to glob ``{element}-*POSCAR``.  Falls back to
+        ``dpgen_dir/{element}/confs/`` if not set.
+    machine_template : str or None
+        dpgen-style ``machine.json`` for slurm resource defaults (partition,
+        nodes, walltime, …).  Extracted values are overridden by constructor
+        parameters.
+    partition : str or None
+        Slurm partition.
+    nodes : int
+        Number of nodes.
+    ntasks_per_node : int
+        Tasks (MPI ranks) per node.
+    wall_time : str
+        Wall time in ``'HH:MM:SS'`` format.
+    gres : str or None
+        Generic resource scheduling, e.g. ``'gpu:1'``.
+    lmp_command : str
+        LAMMPS executable and arguments.  Default: ``'lmp -in run.in > log.run'``.
     template_dir : str or None
         Jinja2 template directory.  Defaults to the built-in templates
         shipped with the package (``extrempy/campaign/templates/``).
-    job_template : str or None
-        Path to a JSON job template for ``InputGenerator.generate_submit``.
-    platform : str
-        Submission platform (``'bh'`` or ``'slurm'``).
     """
 
-    def __init__(self, work_root, poscar_dir, pot_root_dir,
-                 template_dir=None, job_template=None, platform='bh',
-                 two_phase_nz=10, npt_n=5, npt_dT=100, npt_shift=-600,
+    def __init__(self, work_root,
+                 # model & POSCAR (dpgen_dir auto-links, explicit paths override)
+                 dpgen_dir=None,
+                 dp_model_path=None,
+                 poscar_path=None,
+                 poscar_dir=None,
+
+                 # slurm resources (machine_template provides defaults)
+                 machine_template=None,
+                 partition=None,
+                 nodes=1,
+                 ntasks_per_node=32,
+                 wall_time='24:00:00',
+                 gres=None,
+                 lmp_command='lmp -in run.in > log.run',
+
+                 # templates (built-in by default)
+                 template_dir=None,
+
+                 # temperature / simulation
                  two_phase_frac=0.10, two_phase_shift=300,
+                 two_phase_nz=10,
+                 npt_n=5, npt_dT=100, npt_shift=-600,
                  supercell=(5, 5, 5),
                  liquid_superheat=1.9,
                  equil_steps=100000, heat_steps=10000,
                  dump_freq=10, dt=0.001, Q_cutoff=3.0, pressure=0.0001):
 
         self.work_root = work_root
-        self.poscar_dir = poscar_dir
-        self.pot_root_dir = pot_root_dir
-        self.template_dir = template_dir if template_dir else _TEMPLATE_DIR
-        self.job_template = job_template
-        self.platform = platform
 
-        # temperature settings
+        # model & POSCAR sources
+        self.dpgen_dir = dpgen_dir
+        self.dp_model_path = dp_model_path
+        self.poscar_path = poscar_path
+        self.poscar_dir = poscar_dir
+
+        # slurm
+        self.machine_template = machine_template
+        self.partition = partition
+        self.nodes = nodes
+        self.ntasks_per_node = ntasks_per_node
+        self.wall_time = wall_time
+        self.gres = gres
+        self.lmp_command = lmp_command
+
+        # templates
+        self.template_dir = template_dir if template_dir else _TEMPLATE_DIR
+
+        # temperature / simulation
         self.two_phase_frac = two_phase_frac
         self.two_phase_shift = two_phase_shift
         self.two_phase_nz = two_phase_nz
@@ -68,8 +119,6 @@ class EOSCalculator:
         self.npt_shift = npt_shift
         self.supercell = supercell
         self.liquid_superheat = liquid_superheat
-
-        # simulation parameters
         self.equil_steps = equil_steps
         self.heat_steps = heat_steps
         self.dump_freq = dump_freq
@@ -77,7 +126,7 @@ class EOSCalculator:
         self.Q_cutoff = Q_cutoff
         self.pressure = pressure
 
-        # state
+        # state (set by subclass or batch runner)
         self.element = None
 
     # ---- hooks (overridable) ------------------------------------------------
@@ -86,24 +135,58 @@ class EOSCalculator:
         raise NotImplementedError
 
     def _find_pot(self):
-        """Return path to the latest compressed DP frozen model."""
-        for compressed in [True, False]:
-            pat = os.path.join(
-                self.pot_root_dir,
-                f'{self.element}_sample/iter.00*/00.train/000/'
-                f'{"frozen_model_compressed.pb" if compressed else "frozen_model.pb"}')
-            files = sorted(glob.glob(pat))
-            if files:
-                return files[-1]
-        raise FileNotFoundError(f'No DP potential found for {self.element}')
+        """Return path to the DP frozen model.
+
+        Priority:
+          1. ``self.dp_model_path`` (explicit)
+          2. ``self.dpgen_dir`` → auto-detect DPGEN output
+        """
+        if self.dp_model_path:
+            if not os.path.exists(self.dp_model_path):
+                raise FileNotFoundError(
+                    f'dp_model_path not found: {self.dp_model_path}')
+            return self.dp_model_path
+
+        if self.dpgen_dir:
+            for name in ['frozen_model_compressed.pb', 'frozen_model.pb']:
+                pat = os.path.join(
+                    self.dpgen_dir,
+                    f'{self.element}_sample/iter.*/00.train/000/',
+                    name)
+                files = sorted(glob.glob(pat))
+                if files:
+                    return files[-1]
+
+        raise FileNotFoundError(
+            f'No DP model found for {self.element}. '
+            'Set dp_model_path or dpgen_dir.')
 
     def _find_poscar(self, idx=0):
-        """Return path to a POSCAR file for *element*."""
-        pat = os.path.join(self.poscar_dir, f'{self.element}-*POSCAR')
-        files = sorted(glob.glob(pat))
-        if not files:
-            raise FileNotFoundError(f'No POSCAR found for {self.element}')
-        return files[idx]
+        """Return path to a POSCAR file.
+
+        Priority:
+          1. ``self.poscar_path`` (explicit file)
+          2. ``self.poscar_dir`` → glob ``{element}-*POSCAR``
+          3. ``self.dpgen_dir`` → glob ``{dpgen_dir}/{element}/confs/*.POSCAR``
+        """
+        if self.poscar_path:
+            return self.poscar_path
+
+        if self.poscar_dir:
+            pat = os.path.join(self.poscar_dir, f'{self.element}-*POSCAR')
+            files = sorted(glob.glob(pat))
+            if files:
+                return files[idx]
+
+        if self.dpgen_dir:
+            pat = os.path.join(self.dpgen_dir, self.element, 'confs', '*.POSCAR')
+            files = sorted(glob.glob(pat))
+            if files:
+                return files[idx]
+
+        raise FileNotFoundError(
+            f'No POSCAR found for {self.element}. '
+            'Set poscar_path, poscar_dir, or dpgen_dir.')
 
     def _get_two_phase_temps(self):
         """Return candidate temperatures for two-phase runs."""
@@ -154,6 +237,89 @@ class EOSCalculator:
                 id=1, name=self.element,
                 mass=_get_mass_map([self.element])[0])])
 
+    def _resolve_slurm_config(self):
+        """Read machine_template (if given) as defaults, then apply overrides.
+
+        Returns dict with keys: partition, nodes, ntasks_per_node,
+        wall_time, gres, command.
+        """
+        cfg = dict(
+            partition=self.partition,
+            nodes=self.nodes,
+            ntasks_per_node=self.ntasks_per_node,
+            wall_time=self.wall_time,
+            gres=self.gres,
+            command=self.lmp_command,
+        )
+
+        if self.machine_template and os.path.exists(self.machine_template):
+            with open(self.machine_template) as f:
+                machine = json.load(f)
+
+            for key in ['model_devi', 'fp']:
+                raw = machine.get(key)
+                if not raw:
+                    continue
+                if isinstance(raw, list):
+                    raw = raw[0] if raw else {}
+                if not raw:
+                    continue
+
+                res = raw.get('resources', {})
+                bat = raw.get('machine', {}).get('batch', {})
+                combo = {**res, **bat}  # resources overridden by batch
+
+                if not cfg['partition']:
+                    cfg['partition'] = (res.get('queue_name')
+                                        or bat.get('slurm_partition'))
+                if cfg['nodes'] == 1:
+                    cfg['nodes'] = (res.get('number_node', 1)
+                                    or bat.get('slurm_nodes', 1))
+                if cfg['ntasks_per_node'] == 32:
+                    cfg['ntasks_per_node'] = (res.get('cpu_per_node', 32)
+                                              or bat.get('slurm_ntasks_per_node', 32))
+                if cfg['wall_time'] == '24:00:00':
+                    cfg['wall_time'] = bat.get('slurm_time', '24:00:00')
+                if not cfg['gres']:
+                    cfg['gres'] = bat.get('slurm_gres', '')
+                if cfg['command'] == 'lmp -in run.in > log.run':
+                    cfg['command'] = raw.get('command', 'lmp -in run.in > log.run')
+                break
+
+        return cfg
+
+    def _write_sbatch(self, cfg, job_name, work_dir):
+        """Write job.sbatch in *work_dir*."""
+        lines = ['#!/bin/bash']
+        lines.append(f'#SBATCH -J {job_name}')
+        if cfg['partition']:
+            lines.append(f'#SBATCH -p {cfg["partition"]}')
+        lines.append(f'#SBATCH -N {cfg["nodes"]}')
+        lines.append(f'#SBATCH --ntasks-per-node={cfg["ntasks_per_node"]}')
+        if cfg['wall_time']:
+            lines.append(f'#SBATCH -t {cfg["wall_time"]}')
+        if cfg['gres']:
+            lines.append(f'#SBATCH --gres={cfg["gres"]}')
+        lines.append('')
+        lines.append(f'cd {work_dir}')
+        lines.append('')
+        lines.append(cfg['command'])
+
+        path = os.path.join(work_dir, 'job.sbatch')
+        with open(path, 'w') as f:
+            f.write('\n'.join(lines) + '\n')
+        return path
+
+    def _submit_slurm_job(self, gen, job_name, submit=True):
+        """Write sbatch → optionally submit."""
+        cfg = self._resolve_slurm_config()
+        self._write_sbatch(cfg, job_name, gen.work_path)
+        if submit:
+            subprocess.run(
+                ['sbatch', 'job.sbatch'],
+                cwd=gen.work_path,
+                check=True)
+
     # ---- Phase 1: two-phase melt determination ------------------------------
 
     def generate_two_phase(self):
@@ -187,12 +353,8 @@ class EOSCalculator:
     def submit_two_phase(self, submit=True):
         for gen in self._two_phase_gens:
             T_est = gen.params.get('Tm_estimate')
-            gen.generate_submit(
-                self.job_template,
-                job_name=f'{self.element}_{T_est}k',
-                platform=self.platform)
-            if submit:
-                gen.submit()
+            job_name = f'{self.element}_{T_est}k'
+            self._submit_slurm_job(gen, job_name, submit=submit)
 
     def analyze_two_phase(self):
         """Analyze two-phase dump files and return detected Tm interval."""
@@ -208,7 +370,7 @@ class EOSCalculator:
                     gen.work_path, 'dump.*')))
 
             verdict = 'unknown'
-            for df in dump_files[-3:]:   # last few dumps
+            for df in dump_files[-3:]:
                 atoms = read_dump_file(df)
                 if atoms is None:
                     continue
@@ -266,12 +428,8 @@ class EOSCalculator:
         for gen in self._npt_gens:
             T = gen.params.get('temperature')
             phase = 'liquid' if 'high_temperature' in gen.params else 'solid'
-            gen.generate_submit(
-                self.job_template,
-                job_name=f'{self.element}_{T}k_npt_{phase}',
-                platform=self.platform)
-            if submit:
-                gen.submit()
+            job_name = f'{self.element}_{T}k_npt_{phase}'
+            self._submit_slurm_job(gen, job_name, submit=submit)
 
     def analyze_npt(self):
         """Process NPT directories and return summary DataFrame."""
@@ -318,12 +476,8 @@ class EOSCalculator:
         for gen in self._traj_gens:
             T = gen.params['temperature']
             phase = 'liquid' if 'high_temperature' in gen.params else 'solid'
-            gen.generate_submit(
-                self.job_template,
-                job_name=f'{self.element}_{T}k_nvt_{phase}',
-                platform=self.platform)
-            if submit:
-                gen.submit()
+            job_name = f'{self.element}_{T}k_nvt_{phase}'
+            self._submit_slurm_job(gen, job_name, submit=submit)
 
     # ---- full pipeline ----------------------------------------------------
 
@@ -342,9 +496,10 @@ class ElementEOSCalculator(EOSCalculator):
 
     Examples
     --------
-    >>> calc = ElementEOSCalculator(
-    ...     'Al', work_root='/tmp/eos', poscar_dir='/poscars',
-    ...     pot_root_dir='/pot')
+    >>> calc = ElementEOSCalculator('Al',
+    ...     work_root='/share/zeng/metals/dpmd',
+    ...     dpgen_dir='/share/zeng/metals/sample',
+    ...     machine_template='~/template/dpgen-machine.json')
     >>> calc.run_all(submit=False)
     """
 
@@ -357,15 +512,13 @@ class ElementEOSCalculator(EOSCalculator):
         return data.get('Tm', 1000)
 
 
-def run_eos_all(elements, work_root, poscar_dir, pot_root_dir, **kwargs):
+def run_eos_all(elements, work_root, **kwargs):
     """Batch EOSCalculator for a list of elements.
 
     Parameters
     ----------
     elements : list of str
     work_root : str
-    poscar_dir : str
-    pot_root_dir : str
     **kwargs
         Forwarded to each ``ElementEOSCalculator``.
 
@@ -378,8 +531,7 @@ def run_eos_all(elements, work_root, poscar_dir, pot_root_dir, **kwargs):
     for el in elements:
         try:
             calc = ElementEOSCalculator(
-                el, work_root=work_root, poscar_dir=poscar_dir,
-                pot_root_dir=pot_root_dir, **kwargs)
+                el, work_root=work_root, **kwargs)
             calc.run_all(submit=False)
             results[el] = 'generated'
         except Exception as e:

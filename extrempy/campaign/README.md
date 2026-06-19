@@ -72,32 +72,62 @@ build_all_elements()          run_eos_all()
 
 ## 快速开始
 
-### 基本用法
+### 模式 A: 从 DPGEN 项目一键联动（推荐）
+
+如果 DP 模型和 POSCAR 都来自 DPGEN 项目，只需给一个 `dpgen_dir`：
 
 ```python
 from extrempy import ElementEOSCalculator
 
-calc = ElementEOSCalculator(
-    'Al',
-    work_root='/share/zeng/metals/dpmd',
-    poscar_dir='/share/zeng/metals/poscar',
-    pot_root_dir='/share/zeng/metals/sample',
-    job_template='/share/zeng/template/lmp-job.json',
+calc = ElementEOSCalculator('Al',
+    work_root    = '/share/zeng/metals/dpmd',
+    dpgen_dir    = '/share/zeng/metals/sample',       # 自动搜 model + POSCAR
+    machine_template = '~/template/dpgen-machine.json',
+    partition    = 'gpu_share',                       # slurm 分区
+    nodes        = 1,                                 # 覆盖 machine_template
+    ntasks_per_node = 8,
+    wall_time    = '48:00:00',
+    gres         = 'gpu:1',
 )
 
 # 分步执行
-calc.generate_two_phase()        # 生成双相法输入
-calc.submit_two_phase()           # 提交到集群
-calc.analyze_two_phase()          # 分析结果 → Tm 区间
+calc.generate_two_phase()           # 生成双相法输入
+calc.submit_two_phase()             # 提交到集群
+calc.analyze_two_phase()            # 分析结果 → Tm 区间
 
-calc.generate_npt()               # 生成 NPT 输入（固体+液体）
+calc.generate_npt()                 # 生成 NPT 输入（固体+液体）
 calc.submit_npt()
 
-calc.generate_nvt_traj()          # 生成 NVT 轨迹输入
+calc.generate_nvt_traj()            # 生成 NVT 轨迹输入
 calc.submit_nvt_traj()
 
 # 或一步到位
 calc.run_all(submit=True)
+```
+
+### 模式 B: 显式指定所有路径
+
+如果模型是额外训练的、POSCAR 是额外准备的：
+
+```python
+calc = ElementEOSCalculator('Al',
+    work_root    = '/share/zeng/metals/dpmd',
+    dp_model_path = '/extra/train/frozen_model.pb',   # 额外训练的模型
+    poscar_path   = '/extra/confs/Al-fcc.POSCAR',      # 额外准备的 POSCAR
+    machine_template = '~/template/dpgen-machine.json',
+    partition = 'cpu', nodes=2, ntasks_per_node=32,
+)
+```
+
+### 模式 C: 混合（DP 模型走 dpgen_dir，POSCAR 走外部目录）
+
+```python
+calc = ElementEOSCalculator('Al',
+    work_root = '/share/zeng/metals/dpmd',
+    dpgen_dir = '/share/zeng/metals/sample',            # 从这里找 DP 模型
+    poscar_dir = '/share/zeng/metals/poscar',            # 从这里找 POSCAR
+    machine_template = '~/template/dpgen-machine.json',
+)
 ```
 
 ### 仅生成不提交
@@ -139,8 +169,8 @@ plot_thermo_summary(summary, 'Al')
 | 方法 | 默认行为 |
 |---|---|
 | `_get_tm()` → float | 从 `ELEMENT_PHASE_DATA` 查熔点 |
-| `_find_pot()` → str | 从 `pot_root_dir/{element}_sample/iter.00*/` 找 `frozen_model_compressed.pb` |
-| `_find_poscar(idx=0)` → str | 从 `poscar_dir/{element}-*POSCAR` 找 |
+| `_find_pot()` → str | `dp_model_path > dpgen_dir/{el}_sample/iter.*/00.train/000/` |
+| `_find_poscar(idx=0)` → str | `poscar_path > poscar_dir/{el}-*POSCAR > dpgen_dir/{el}/confs/*.POSCAR` |
 | `_get_two_phase_temps()` → list | `Tm + [-ΔT+shift, 0+shift, ΔT+shift]` |
 | `_get_npt_temps()` → list | `Tm + [-(n//2)..(n//2)]*dT + shift` |
 
@@ -148,13 +178,13 @@ plot_thermo_summary(summary, 'Al')
 
 绑定到单个元素的子类，自动实现上述 hooks。
 
-### `run_eos_all(elements, work_root, poscar_dir, pot_root_dir, **kwargs)`
+### `run_eos_all(elements, work_root, **kwargs)`
 
 ```python
 results = run_eos_all(['Al', 'Cu', 'Au'],
     work_root='/share/zeng/metals/dpmd',
-    poscar_dir='/share/zeng/metals/poscar',
-    pot_root_dir='/share/zeng/metals/sample')
+    dpgen_dir='/share/zeng/metals/sample',
+    machine_template='~/template/dpgen-machine.json')
 # → {'Al': 'generated', 'Cu': 'generated', 'Au': 'generated'}
 ```
 
@@ -162,24 +192,49 @@ results = run_eos_all(['Al', 'Cu', 'Au'],
 
 ## 配置参数
 
+### 模型与结构文件
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `dpgen_dir` | None | DPGEN 项目根目录。自动搜 model + POSCAR |
+| `dp_model_path` | None | 显式 DP frozen_model 路径（跳过搜索） |
+| `poscar_path` | None | 显式 POSCAR 路径（跳过搜索） |
+| `poscar_dir` | None | POSCAR 目录，glob `{element}-*POSCAR` |
+
+搜索优先级：`dp_model_path > dpgen_dir`，`poscar_path > poscar_dir > dpgen_dir/confs`
+
+### Slurm 提交
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `machine_template` | None | dpgen `machine.json` 路径，用作默认资源配置 |
+| `partition` | None | Slurm 分区 |
+| `nodes` | 1 | 节点数 |
+| `ntasks_per_node` | 32 | 每节点任务数 |
+| `wall_time` | '24:00:00' | 最长运行时间 |
+| `gres` | None | GPU 资源 (e.g. `'gpu:1'`) |
+| `lmp_command` | `'lmp -in run.in > log.run'` | LAMMPS 运行命令 |
+
+优先级：构造函数参数 > `machine_template(model_devi/fp)` 段
+
+### 温度与计算
+
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `two_phase_frac` | 0.10 | 双相法温度偏移 = Tm × `two_phase_frac` |
 | `two_phase_shift` | 300 | 双相法整体偏移 (K) |
-| `two_phase_nz` | 10 | 双相法 z 方向复制数（固液界面需要更长盒子） |
+| `two_phase_nz` | 10 | 双相法 z 方向复制数 |
 | `npt_n` | 5 | NPT 温度点数 |
 | `npt_dT` | 100 | NPT 温度间隔 (K) |
 | `npt_shift` | -600 | NPT 相对 Tm 的整体偏移 (K) |
 | `supercell` | (5,5,5) | 晶胞复制数 |
-| `liquid_superheat` | 1.9 | 液相熔化温度倍数 (`T_high = Tm × liquid_superheat`) |
+| `liquid_superheat` | 1.9 | 液相过热倍数 (`T_high = Tm × liquid_superheat`) |
 | `equil_steps` | 100000 | 平衡步数 |
 | `heat_steps` | 10000 | 加热步数 |
-| `dump_freq` | 10 | NVT 轨迹 dump 频率（步） |
+| `dump_freq` | 10 | NVT 轨迹 dump 频率 |
 | `dt` | 0.001 | LAMMPS 时间步长 (ps) |
-| `Q_cutoff` | 3.0 | Q 级序参量截断半径 (Å) |
-| `pressure` | 0.0001 | 压强 (万 bar，即 1 bar) |
-| `job_template` | None | 作业提交模板 JSON 路径（必填） |
-| `platform` | 'bh' | 提交平台 (`'bh'` / `'slurm'`) |
+| `Q_cutoff` | 3.0 | Q 序参量截断半径 (Å) |
+| `pressure` | 0.0001 | 压强 (万 bar) |
 
 > **关于温度计算示例**（以 Al 为例，Tm = 933 K）：
 > - Two-phase 温度: `[933-100+300, 933+0+300, 933+100+300]` = [1133, 1233, 1333] K
@@ -196,7 +251,7 @@ results = run_eos_all(['Al', 'Cu', 'Au'],
 │   │   ├── run.in          # LAMMPS 输入 (two-phase.j2 渲染)
 │   │   ├── confs.data      # LAMMPS 结构文件
 │   │   ├── cp.pb           # DeePMD 势函数
-│   │   ├── job.json        # 作业参数
+│   │   ├── job.sbatch      # Slurm 脚本
 │   │   └── traj/           # dump 输出
 │   ├── {Tm2}k/
 │   └── {Tm3}k/
