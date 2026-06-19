@@ -110,21 +110,26 @@ class DPBuilder:
         self._ensure_dirs()
         Tm = self._get_tm()
         self._aimd_dirs = []
+        solid_label = None
         for seg in segs:
             label = seg['label']
             is_liquid = label.endswith('-LIQ')
             if is_liquid:
+                poscar_ref = solid_label
                 T_ref = int(self.liquid_T_factor * Tm)
             else:
+                poscar_ref = label
+                solid_label = label
                 T_ref = int((seg['T_core'][0] + seg['T_core'][1]) / 2)
-            work_dir = os.path.join(self.init_vasp_dir, label)
+            job_label = f"{seg['structure'].upper()}-{T_ref}K"
+            work_dir = os.path.join(self.init_vasp_dir, job_label)
             os.makedirs(work_dir, exist_ok=True)
             gen = VASPGenerator(work_path=work_dir,
                                 poscar_file=os.path.join(self.confs_dir,
-                                                         label + '.POSCAR'),
+                                                         poscar_ref + '.POSCAR'),
                                 potcar_map=self.potcar_map)
             if is_liquid:
-                shutil.copy(os.path.join(self.confs_dir, label + '.POSCAR'),
+                shutil.copy(os.path.join(self.confs_dir, poscar_ref + '.POSCAR'),
                             os.path.join(work_dir, 'POSCAR'))
                 scale_poscar_volume(os.path.join(work_dir, 'POSCAR'),
                                     self.liquid_V_scale)
@@ -132,51 +137,52 @@ class DPBuilder:
                            scale=self.nband_scale, nband_min=self.nband_min)
             gen.generate_incar(md_steps=self.aimd_steps, dt=self.aimd_dt,
                                latt_temp=T_ref, mode='aimd-ttm')
-            self._aimd_dirs.append((label, work_dir))
-            print(f"  {label}: T_ref={T_ref}K (1.8Tm={1.8*Tm:.0f})"
+            self._aimd_dirs.append((job_label, work_dir, label))
+            print(f"  {job_label}: T_ref={T_ref}K (1.8Tm={1.8*Tm:.0f})"
                   if is_liquid else
-                  f"  {label}: T_ref={T_ref}K (T_core midpoint)")
+                  f"  {job_label}: T_ref={T_ref}K (T_core midpoint)")
 
     def submit_init_aimd(self, submit=True):
-        for label, wd in self._aimd_dirs:
+        for jl, wd, *_ in self._aimd_dirs:
             gen = VASPGenerator(work_path=wd, poscar_file=None)
-            job_name = (self.element or 'system') + '-' + label
+            job_name = (self.element or 'system') + '-' + jl
             if self.platform == 'slurm':
                 if self.machine_template and os.path.exists(self.machine_template):
                     gen.generate_submit(self.machine_template, job_name,
                                         platform='slurm')
                     if submit:
                         gen.submit()
-                        print(f"  Submitted: {label} ({wd})")
+                        print(f"  Submitted: {jl} ({wd})")
                     else:
-                        print(f"  Script generated (not submitted): {label} ({wd})")
+                        print(f"  Script generated (not submitted): {jl} ({wd})")
                 else:
-                    print(f"  SKIP submit {label}: no machine_template")
+                    print(f"  SKIP submit {jl}: no machine_template")
             elif self.platform == 'bh':
                 if self.job_template and os.path.exists(self.job_template):
                     gen.generate_submit(self.job_template, job_name,
                                         platform='bh')
                     if submit:
                         gen.submit()
-                        print(f"  Submitted: {label} ({wd})")
+                        print(f"  Submitted: {jl} ({wd})")
                     else:
-                        print(f"  Script generated (not submitted): {label} ({wd})")
+                        print(f"  Script generated (not submitted): {jl} ({wd})")
                 else:
-                    print(f"  SKIP submit {label}: no job_template")
+                    print(f"  SKIP submit {jl}: no job_template")
             else:
-                print(f"  SKIP submit {label}: unknown platform '{self.platform}'")
+                print(f"  SKIP submit {jl}: unknown platform '{self.platform}'")
 
     # ---- collect init data ----
     def collect_init_data(self, segs):
+        _dirs = [(l, w) for l, w, _ in self._aimd_dirs]
         results = bootstrap_init_data(
-            self._aimd_dirs, self.init_data_dir,
+            _dirs, self.init_data_dir,
             self.raw_to_set_script,
             drop_first=self.drop_first_aimd,
             low_T_stride=self.low_T_stride,
             high_T_stride=self.high_T_stride,
             high_T_threshold=self.high_T_threshold)
-        for label, wd in self._aimd_dirs:
-            generate_liquid_poscar_from_contcar((label, wd), self.confs_dir)
+        for _, wd, orig in self._aimd_dirs:
+            generate_liquid_poscar_from_contcar((orig, wd), self.confs_dir)
         self._init_data_sys = results
         return results
 
@@ -352,13 +358,7 @@ class ElementDPBuilder(DPBuilder):
             st = seg['structure']
             out_path = os.path.join(self.confs_dir, label + '.POSCAR')
             if seg['label'].endswith('-LIQ'):
-                if os.path.exists(out_path):
-                    print(f"  SKIP {label}: POSCAR already exists")
-                    continue
-                if solid_poscar_path and os.path.exists(solid_poscar_path):
-                    shutil.copy(solid_poscar_path, out_path)
-                    print(f"  {label}: copied placeholder from "
-                          f"{os.path.basename(solid_poscar_path)}")
+                print(f"  SKIP {label}: generated from AIMD CONTCAR")
                 continue
             sc = DEFAULT_SUPERCELL.get(st, (3, 3, 3))
             if os.path.exists(out_path):
