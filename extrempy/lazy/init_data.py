@@ -1,13 +1,30 @@
 import os
 import shutil
-import subprocess
 import glob
 
 import numpy as np
 import dpdata
 
 
-def bootstrap_init_data(aimd_dirs, sample_root, raw_to_set_script,
+def _raw_to_set(out_dir, nline_per_set=100000):
+    raw_names = ['box.raw', 'coord.raw', 'energy.raw', 'force.raw',
+                 'virial.raw', 'atom_ener.raw', 'fparam.raw', 'aparam.raw']
+    for raw_name in raw_names:
+        raw_path = os.path.join(out_dir, raw_name)
+        if not os.path.exists(raw_path):
+            continue
+        data = np.loadtxt(raw_path)
+        nframe = data.shape[0] if data.ndim > 0 else 1
+        for i in range(0, nframe, nline_per_set):
+            chunk = data[i:i + nline_per_set]
+            set_dir = os.path.join(out_dir, f'set.{i // nline_per_set:03d}')
+            os.makedirs(set_dir, exist_ok=True)
+            base = raw_name.replace('.raw', '')
+            np.save(os.path.join(set_dir, base), chunk.astype(np.float32))
+        os.remove(raw_path)
+
+
+def bootstrap_init_data(aimd_dirs, sample_root,
                         drop_first=200, low_T_stride=50, high_T_stride=30,
                         high_T_threshold=1500):
     """Read VASP AIMD OUTCAR, extract frames, write deepmd/npy + fparam.raw.
@@ -16,7 +33,6 @@ def bootstrap_init_data(aimd_dirs, sample_root, raw_to_set_script,
     ----------
     aimd_dirs : list[(label, aimd_dir)]
     sample_root : str  (init_data root)
-    raw_to_set_script : str  (path to raw_to_set.sh)
     drop_first : int  steps to discard at start
     low_T_stride : int  frame stride for T < high_T_threshold
     high_T_stride : int  frame stride for T >= high_T_threshold
@@ -61,16 +77,7 @@ def bootstrap_init_data(aimd_dirs, sample_root, raw_to_set_script,
         np.savetxt(os.path.join(out_dir, 'fparam.raw'), fpar)
         raw_list = glob.glob(os.path.join(out_dir, '*', '*.raw'))
         if raw_list:
-            set_numb = 100000
-            cmd = '%s %.d' % (raw_to_set_script, set_numb)
-            ret = subprocess.run(cmd, shell=True, cwd=out_dir,
-                                 capture_output=True)
-            if ret.returncode != 0:
-                stderr = ret.stderr.decode() if ret.stderr else ''
-                print(f"  WARNING: {raw_to_set_script} returned "
-                      f"{ret.returncode} for {label}")
-                if stderr:
-                    print(f"    stderr: {stderr[:200]}")
+            _raw_to_set(out_dir)
         init_data_sys.append(label)
         print(f"  {label}: T_ref={fparam_K:.0f}K, "
               f"{n_selected}/{nframe} frames, stride={stride}")

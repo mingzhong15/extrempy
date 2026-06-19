@@ -24,7 +24,6 @@ class DPBuilder:
     def __init__(self, work_root, potcar_lib, potcar_set='PBE54',
                  machine_template=None, job_template=None,
                  platform='bh',
-                 raw_to_set_script='/share/zeng/template/raw_to_set.sh',
                  encut=600, nband_scale=1.2, nband_min=5,
                  press_grid=None,
                  nsteps_per_phase=5,
@@ -40,7 +39,6 @@ class DPBuilder:
         self.potcar_set = potcar_set
         self.machine_template = machine_template
         self.job_template = job_template
-        self.raw_to_set_script = raw_to_set_script
         self.encut = encut
         self.nband_scale = nband_scale
         self.nband_min = nband_min
@@ -176,7 +174,6 @@ class DPBuilder:
         _dirs = [(l, w) for l, w, _ in self._aimd_dirs]
         results = bootstrap_init_data(
             _dirs, self.init_data_dir,
-            self.raw_to_set_script,
             drop_first=self.drop_first_aimd,
             low_T_stride=self.low_T_stride,
             high_T_stride=self.high_T_stride,
