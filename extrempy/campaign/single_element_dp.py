@@ -5,7 +5,8 @@ import glob
 
 from extrempy.lazy.vasp import VASPGenerator, _incar_dict, _render_incar
 from extrempy.lazy.dpgen import (DPGENGenerator,
-                                 _generate_dpgen_machine_from_file)
+                                 _generate_dpgen_machine_from_file,
+                                 _generate_temp_list)
 from extrempy.lazy.lib import (get_phase_segments, get_viable_elements,
                                ELEMENT_PHASE_DATA)
 from extrempy.lazy.potcar_map import PotcarMap
@@ -14,7 +15,7 @@ from extrempy.lazy.init_data import (bootstrap_init_data,
                                      scale_poscar_volume)
 
 
-class ExtremeDPBuilder:
+class DPBuilder:
     """Base class for automated DP potential construction across wide T-P.
 
     Subclasses implement get_phase_segments(), generate_poscars(), build_potcar().
@@ -174,17 +175,46 @@ class ExtremeDPBuilder:
         return results
 
     # ---- DPGEN ----
-    def generate_dpgen(self, segs, elements=None):
+    def generate_dpgen(self, segs, elements=None,
+                       extra_init_sys=None,
+                       phase_ids=None, phase_labels=None):
         if elements is None:
             elements = self.elements
+
+        # Filter segs by phase
+        if phase_ids is not None:
+            segs = [segs[i] for i in phase_ids]
+        elif phase_labels is not None:
+            segs = [s for s in segs if s['label'] in phase_labels]
+        if not segs:
+            raise ValueError("No phase segments remain after filtering")
+
         self._ensure_dirs()
         zvals = self.build_potcar(elements)
         type_map = list(elements)
         g = DPGENGenerator(work_path=self.dpgen_dir, type_map=type_map)
+
+        # Init data: AIMD collected (if any) + extra
         g._set_init_data(set_dir=self.dpgen_dir,
                          prefix=self._init_data_prefix(segs))
-        g._set_sys_configs(set_dir=self.confs_dir,
-                           prefix=self.element + '-*.POSCAR')
+        if extra_init_sys:
+            for path in extra_init_sys:
+                rel = os.path.relpath(os.path.abspath(path), self.dpgen_dir)
+                if rel not in g.jparam['init_data_sys']:
+                    g.jparam['init_data_sys'].append(rel)
+
+        # Sys configs: only for selected phases
+        if phase_ids is not None or phase_labels is not None:
+            for seg in segs:
+                poscar = os.path.join(self.confs_dir,
+                                      seg['label'] + '.POSCAR')
+                if os.path.exists(poscar):
+                    g.jparam['sys_configs'].append(
+                        [os.path.relpath(poscar, self.dpgen_dir)])
+        else:
+            g._set_sys_configs(set_dir=self.confs_dir,
+                               prefix=self.element + '-*.POSCAR')
+
         g._set_model_traninig_settings(stop_batch=200000, is_ele_temp=True)
         g._set_model_devi_settings(dt=0.001, f_trust=self.f_trust,
                                    is_relative=False, epsilon=1.0)
@@ -255,7 +285,7 @@ class ExtremeDPBuilder:
         return 1000.0
 
 
-class SingleElementDPBuilder(ExtremeDPBuilder):
+class ElementDPBuilder(DPBuilder):
     """v1: single-element DP potential across phases from RT to 2*Tm."""
 
     def __init__(self, element, **kwargs):
@@ -269,7 +299,18 @@ class SingleElementDPBuilder(ExtremeDPBuilder):
         return data.get('Tm', 1000)
 
     def get_phase_segments(self):
-        return get_phase_segments(self.element)
+        segs = get_phase_segments(self.element)
+        Tm = self._get_tm()
+        print(f"Element: {self.element}, Tm={Tm}K, {len(segs)} phase segment(s)")
+        for i, s in enumerate(segs):
+            tc = s['T_core']
+            te = s['T_explore']
+            nT = len(_generate_temp_list(te[0], te[1]))
+            print(f"  [{i}] {s['label']} ({s['structure']})  "
+                  f"T_core=[{tc[0]:.0f},{tc[1]:.0f}]K  "
+                  f"T_explore=[{te[0]:.0f},{te[1]:.0f}]K  "
+                  f"{nT} T-points")
+        return segs
 
     def generate_poscars(self, segs):
         from extrempy.structure import generate_element_structure
@@ -324,7 +365,7 @@ def build_all_elements(work_root, elements=None, **kwargs):
     results = {}
     for el in elements:
         try:
-            b = SingleElementDPBuilder(el, work_root=work_root, **kwargs)
+            b = ElementDPBuilder(el, work_root=work_root, **kwargs)
             segs = b.get_phase_segments()
             b.generate_poscars(segs)
             b.generate_init_aimd(segs)

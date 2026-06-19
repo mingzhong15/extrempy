@@ -6,8 +6,8 @@ from .lazy.dpgen import DPGENGenerator, DPGENParamGenerator
 from .lazy.init_data import (bootstrap_init_data,
                              generate_liquid_poscar_from_contcar,
                              scale_poscar_volume)
-from .campaign.single_element_dp import (ExtremeDPBuilder,
-                                         SingleElementDPBuilder,
+from .campaign.single_element_dp import (DPBuilder,
+                                         ElementDPBuilder,
                                          build_all_elements)
 from .structure import (
     generate_element_structure,
