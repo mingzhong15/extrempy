@@ -192,13 +192,15 @@ class DPBuilder:
         if elements is None:
             elements = self.elements
 
-        # Filter segs by phase
+        # Compute sub_indices for exploration (sys numbering stays consistent)
+        sub_indices = None
         if phase_ids is not None:
-            segs = [segs[i] for i in phase_ids]
+            sub_indices = set(phase_ids)
         elif phase_labels is not None:
-            segs = [s for s in segs if s['label'] in phase_labels]
-        if not segs:
-            raise ValueError("No phase segments remain after filtering")
+            sub_indices = {i for i, s in enumerate(segs)
+                           if s['label'] in phase_labels}
+        if sub_indices is not None and not sub_indices:
+            raise ValueError("No phase segments match the given filter")
 
         self._ensure_dirs()
         zvals = self.build_potcar(elements)
@@ -222,17 +224,9 @@ class DPBuilder:
                     if rel not in g.jparam['init_data_sys']:
                         g.jparam['init_data_sys'].append(rel)
 
-        # Sys configs: only for selected phases
-        if phase_ids is not None or phase_labels is not None:
-            for seg in segs:
-                poscar = os.path.join(self.confs_dir,
-                                      seg['label'] + '.POSCAR')
-                if os.path.exists(poscar):
-                    g.jparam['sys_configs'].append(
-                        [os.path.relpath(poscar, self.dpgen_dir)])
-        else:
-            g._set_sys_configs(set_dir=self.confs_dir,
-                               prefix=self.element + '-*.POSCAR')
+        # Sys configs: always all phases (consistent sys numbering)
+        g._set_sys_configs(set_dir=self.confs_dir,
+                           prefix=self.element + '-*.POSCAR')
 
         g._set_model_traninig_settings(stop_batch=200000, is_ele_temp=True)
         g._set_model_devi_settings(dt=0.001, f_trust=self.f_trust,
@@ -245,7 +239,7 @@ class DPBuilder:
             init_steps=self.init_steps, press_grid=self.press_grid,
             trj_freq=self.trj_freq,
             numb_frame_per_iter_per_PT=self.numb_frame_per_iter_per_PT,
-            ensemble='npt')
+            ensemble='npt', sub_indices=sub_indices)
         self._write_fp_incar(g)
         potcar_path = os.path.join(self.dpgen_dir, 'POTCAR')
         if not os.path.exists(potcar_path):

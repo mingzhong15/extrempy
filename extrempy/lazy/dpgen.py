@@ -272,7 +272,8 @@ class DPGENGenerator(InputGenerator):
                                            press_grid=None,
                                            trj_freq=20,
                                            numb_frame_per_iter_per_PT=5,
-                                           ensemble='npt'):
+                                           ensemble='npt',
+                                           sub_indices=None):
         if init_steps is None:
             init_steps = [1000, 2000, 4000, 8000, 16000]
         if press_grid is None:
@@ -282,6 +283,8 @@ class DPGENGenerator(InputGenerator):
         max_n_p_t = 0
         min_n_p_t = float('inf')
         for sys_idx, seg in enumerate(segs):
+            if sub_indices is not None and sys_idx not in sub_indices:
+                continue
             T_explore = seg['T_explore']
             T_list = _generate_temp_list(T_explore[0], T_explore[1])
             min_n_p_t = min(min_n_p_t, len(T_list) * len(press_grid) * 1)
@@ -486,7 +489,8 @@ class DPGENParamGenerator:
                                            press_grid=None,
                                            trj_freq=20,
                                            numb_frame_per_iter_per_PT=5,
-                                           ensemble='npt'):
+                                           ensemble='npt',
+                                           sub_indices=None):
         if init_steps is None:
             init_steps = [1000, 2000, 4000, 8000, 16000]
         if press_grid is None:
@@ -496,6 +500,8 @@ class DPGENParamGenerator:
         max_n_p_t = 0
         min_n_p_t = float('inf')
         for sys_idx, seg in enumerate(segs):
+            if sub_indices is not None and sys_idx not in sub_indices:
+                continue
             T_explore = seg['T_explore']
             T_list = _generate_temp_list(T_explore[0], T_explore[1])
             min_n_p_t = min(min_n_p_t, len(T_list) * len(press_grid) * 1)
