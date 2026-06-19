@@ -682,3 +682,130 @@ def _get_lattice_str(lattice_type, lattice_param):
         raise ValueError('Lattice type %s not supported'%(lattice_type))
     
     return strs
+
+
+# ================================================================
+#  Phase segment splitting (for automated DPGEN exploration)
+# ================================================================
+
+SKIP_MAGNETIC = {'Fe', 'Co', 'Ni', 'Cr', 'Mn',
+                 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm'}
+SKIP_RADIOACTIVE = {'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac',
+                    'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm'}
+SKIP_GAS = {'H', 'He', 'N', 'O', 'F', 'Ne', 'Cl', 'Ar',
+            'Br', 'Kr', 'I', 'Xe', 'Rn', 'P', 'S', 'Se', 'Te'}
+SKIP_LANTHANIDE = {str(el) for el in
+                   ['La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu',
+                    'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu']}
+SKIP_ACTINIDE = {'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm'}
+SUPPORTED_STRUCTURES = {'fcc', 'bcc', 'hcp', 'dhcp',
+                        'diamond', 'sc', 'bct'}
+
+
+def get_viable_elements():
+    result = []
+    for sym, data in ELEMENT_PHASE_DATA.items():
+        rt = data.get('rt_structure')
+        if rt is None or rt not in SUPPORTED_STRUCTURES:
+            continue
+        if data.get('Tm') is None:
+            continue
+        if sym in SKIP_MAGNETIC:
+            continue
+        if sym in SKIP_RADIOACTIVE:
+            continue
+        if sym in SKIP_GAS:
+            continue
+        if sym in SKIP_LANTHANIDE:
+            continue
+        if len(data.get('phases', [])) == 0:
+            continue
+        result.append(sym)
+    return sorted(result, key=lambda s: ELEMENT_PHASE_DATA[s].get('z', 0))
+
+
+def get_phase_segments(element, T_range=(300, None), overlap_rule='auto',
+                       drop_below_T=200):
+    data = ELEMENT_PHASE_DATA.get(element)
+    if data is None:
+        raise ValueError(f"Element '{element}' not in ELEMENT_PHASE_DATA")
+    Tm = data.get('Tm')
+    if Tm is None:
+        raise ValueError(f"Element '{element}' has no Tm (sublimes)")
+    T_min_range, T_max_range = T_range
+    if T_max_range is None:
+        T_max_range = 2 * Tm
+    phases = data['phases']
+    if not phases:
+        raise ValueError(f"Element '{element}' has no phases data")
+    segs = []
+    for phase in phases:
+        st = phase['structure']
+        if st not in SUPPORTED_STRUCTURES:
+            continue
+        if phase['T_max'] < drop_below_T:
+            continue
+        core_low = max(phase['T_min'], T_min_range)
+        core_high = min(phase['T_max'], T_max_range)
+        if core_low >= core_high:
+            continue
+        segs.append({
+            'label': element + '-' + st.upper(),
+            'structure': st,
+            'T_core': (core_low, core_high),
+        })
+    if not segs:
+        raise ValueError(
+            f"Element '{element}': no phases in T_range "
+            f"{T_min_range}-{T_max_range}K after filtering")
+    _deduplicate_labels(segs)
+    for i in range(len(segs)):
+        if i > 0:
+            T_lower_cut = segs[i]['T_core'][0]
+            delta_lower = _compute_overlap(T_lower_cut,
+                                           is_melting=False,
+                                           overlap_rule=overlap_rule)
+        else:
+            delta_lower = 0
+        if i < len(segs) - 1:
+            T_upper_cut = segs[i]['T_core'][1]
+            delta_upper = _compute_overlap(T_upper_cut,
+                                           is_melting=(T_upper_cut >= Tm * 0.99),
+                                           overlap_rule=overlap_rule)
+        else:
+            delta_upper = _compute_overlap(Tm, is_melting=True,
+                                           overlap_rule=overlap_rule)
+        segs[i]['T_explore'] = (
+            max(segs[i]['T_core'][0] - delta_lower, T_min_range),
+            min(segs[i]['T_core'][1] + delta_upper, T_max_range),
+        )
+    last_structure = segs[-1]['structure']
+    segs.append({
+        'label': element + '-LIQ',
+        'structure': last_structure,
+        'T_core': (Tm, T_max_range),
+        'T_explore': (max(Tm - _compute_overlap(Tm, True, overlap_rule),
+                         T_min_range),
+                       T_max_range),
+    })
+    return segs
+
+
+def _deduplicate_labels(segs):
+    seen = {}
+    for seg in segs:
+        lbl = seg['label']
+        if lbl not in seen:
+            seen[lbl] = 0
+        else:
+            seen[lbl] += 1
+            seg['label'] = f"{lbl}-{seen[lbl] + 1}"
+
+
+def _compute_overlap(T_ref, is_melting, overlap_rule):
+    if overlap_rule == 'auto':
+        return max(0.2 * T_ref, 100)
+    elif callable(overlap_rule):
+        return overlap_rule(T_ref, is_melting)
+    else:
+        return float(overlap_rule)

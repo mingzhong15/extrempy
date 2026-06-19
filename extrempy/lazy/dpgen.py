@@ -127,23 +127,26 @@ class DPGENGenerator(InputGenerator):
         # self.jparam['sys_configs_prefix'] = self.work_dir
         # self.jparam['fp_pp_path'] = self.work_dir
 
-    def _set_init_data(self, prefix='*'):
-
-        set_list = glob.glob(os.path.join(self.work_path, prefix))
-
+    def _set_init_data(self, set_dir=None, prefix='*'):
+        if set_dir is None:
+            set_dir = self.work_path
+        set_list = glob.glob(os.path.join(set_dir, prefix))
+        if not set_list:
+            prefix2 = os.path.join(set_dir, prefix)
+            set_list = glob.glob(prefix2)
         for set_path in set_list:
-            # Calculate relative path from PWD to set_path
-            relative_path = os.path.relpath(set_path, self.work_path)
+            relative_path = os.path.relpath(set_path, set_dir)
             self.jparam['init_data_sys'].append(relative_path)
 
-    def _set_sys_configs(self, prefix='*.POSCAR'):
-
-        
-        conf_list = glob.glob(os.path.join(self.work_path, prefix))
-
+    def _set_sys_configs(self, set_dir=None, prefix='*.POSCAR'):
+        if set_dir is None:
+            set_dir = self.work_path
+        conf_list = glob.glob(os.path.join(set_dir, prefix))
+        if not conf_list:
+            prefix2 = os.path.join(set_dir, prefix)
+            conf_list = glob.glob(prefix2)
         for conf_path in conf_list:
-            # Calculate relative path from PWD to set_path
-            relative_path = os.path.relpath(conf_path, self.work_path)
+            relative_path = os.path.relpath(conf_path, set_dir)
             self.jparam["sys_configs"].append([relative_path])
     
     def _set_model_devi_settings(self, dt = 0.001, 
@@ -183,13 +186,16 @@ class DPGENGenerator(InputGenerator):
 
     def _set_model_devi_jobs(self, sys_idx, Tmin, Tmax, Pmin, Pmax,
                              is_pimd=False,
-                             ensemble='npt', 
+                             ensemble='npt',
                              numb_iters=5,
                              delta_T=2000,
                              init_steps=1000,
                              trj_freq=20,
                              numb_frame_per_iter_per_PT = 10,
                              nbeads=0):
+
+        if not isinstance(sys_idx, (list, tuple)):
+            sys_idx = [sys_idx]
 
         T_list = _generate_temp_list(Tmin, Tmax)
         p_list = (np.array(_generate_pres_list(Pmin, Pmax))*1e4).tolist()
@@ -202,14 +208,14 @@ class DPGENGenerator(InputGenerator):
 
         init_iters_numb = len(self.jparam["model_devi_jobs"])
         print('Existing %.d iterations '%init_iters_numb)
-        
+
         real_idx = init_iters_numb
 
         for range_idx, current_T_list in enumerate(T_ranges):
 
             print(f"\ntemperatures are divided into {range_idx + 1}/{len(T_ranges)} ranges")
             print(f"for temperatures ranges: {min(current_T_list):.2f}K - {max(current_T_list):.2f}K")
-            
+
             for iter_idx in range(numb_iters):
 
                 if real_idx < len(init_steps):
@@ -220,7 +226,7 @@ class DPGENGenerator(InputGenerator):
                 # 创建新的字典
 
                 if ensemble == 'nvt' or ensemble == 'npt':
-             
+
                     new_job = {
                         "sys_idx": sys_idx,
                         "temps": current_T_list,
@@ -234,7 +240,7 @@ class DPGENGenerator(InputGenerator):
                     elif ensemble == 'npt':
                         new_job['press'] = p_list
                         strs_2 += f" press ({len(p_list)}) = {p_list} \n"
-                    
+
                     if not is_pimd:
                         pass
                     else:
@@ -255,11 +261,62 @@ class DPGENGenerator(InputGenerator):
 
                 #print(self.jparam["model_devi_jobs"][-1]['temps'], self.jparam["model_devi_jobs"][-1]['press'])
 
-        print('total number of tasks per iteration: ', len(T_list) * len(p_list) * numb_frame_per_iter_per_PT ) 
+        print('total number of tasks per iteration: ', len(T_list) * len(p_list) * numb_frame_per_iter_per_PT )
 
         self.jparam["fp_task_max"] = len(T_list) * len(p_list) * numb_frame_per_iter_per_PT
         self.jparam["fp_task_min"] = len(T_list) * len(p_list) * 1
 
+    def _set_model_devi_jobs_from_segments(self, segs, *,
+                                           nsteps_per_phase=5,
+                                           init_steps=None,
+                                           press_grid=None,
+                                           trj_freq=20,
+                                           numb_frame_per_iter_per_PT=5,
+                                           ensemble='npt'):
+        if init_steps is None:
+            init_steps = [1000, 2000, 4000, 8000, 16000]
+        if press_grid is None:
+            press_grid = [1, 10, 100, 1000, 10000]
+        init_iters_numb = len(self.jparam["model_devi_jobs"])
+        real_idx = init_iters_numb
+        max_n_p_t = 0
+        min_n_p_t = float('inf')
+        for sys_idx, seg in enumerate(segs):
+            T_explore = seg['T_explore']
+            T_list = _generate_temp_list(T_explore[0], T_explore[1])
+            min_n_p_t = min(min_n_p_t, len(T_list) * len(press_grid) * 1)
+            print(f"\nPhase {seg['label']}: T_explore "
+                  f"{T_explore[0]:.0f}-{T_explore[1]:.0f}K, "
+                  f"{len(T_list)} T points")
+            for iter_idx in range(nsteps_per_phase):
+                if isinstance(init_steps, (list, tuple)):
+                    if real_idx < len(init_steps):
+                        nsteps = init_steps[real_idx]
+                    else:
+                        nsteps = init_steps[-1] * pow(
+                            2, iter_idx - len(init_steps) + 1)
+                else:
+                    nsteps = init_steps
+                new_job = {
+                    "sys_idx": [sys_idx],
+                    "temps": T_list,
+                    "press": press_grid,
+                    "ensemble": ensemble,
+                    "trj_freq": trj_freq,
+                    "nsteps": nsteps,
+                    "_idx": real_idx,
+                }
+                n_p_t = len(T_list) * len(press_grid) * numb_frame_per_iter_per_PT
+                max_n_p_t = max(max_n_p_t, n_p_t)
+                print(f"  Iter. {real_idx} (phase {sys_idx}, "
+                      f"label={seg['label']}): "
+                      f"nsteps={nsteps}, T[{len(T_list)}]xP[{len(press_grid)}]")
+                self.jparam["model_devi_jobs"].append(new_job)
+                real_idx += 1
+        self.jparam["fp_task_max"] = max_n_p_t
+        self.jparam["fp_task_min"] = min_n_p_t
+        print(f"total iters: {real_idx - init_iters_numb}, "
+              f"fp_task_max={self.jparam['fp_task_max']}")
 
 
 class DPGENParamGenerator:
@@ -343,13 +400,16 @@ class DPGENParamGenerator:
 
     def _set_model_devi_jobs(self, sys_idx, Tmin, Tmax, Pmin, Pmax,
                              is_pimd=False,
-                             ensemble='npt', 
+                             ensemble='npt',
                              numb_iters=5,
                              delta_T=2000,
                              init_steps=1000,
                              trj_freq=20,
                              numb_frame_per_iter_per_PT = 10,
                              nbeads=0):
+
+        if not isinstance(sys_idx, (list, tuple)):
+            sys_idx = [sys_idx]
 
         T_list = _generate_temp_list(Tmin, Tmax)
         p_list = (np.array(_generate_pres_list(Pmin, Pmax))*1e4).tolist()
@@ -415,12 +475,64 @@ class DPGENParamGenerator:
 
                 #print(self.jparam["model_devi_jobs"][-1]['temps'], self.jparam["model_devi_jobs"][-1]['press'])
 
-        print('total number of tasks per iteration: ', len(T_list) * len(p_list) * numb_frame_per_iter_per_PT ) 
+        print('total number of tasks per iteration: ', len(T_list) * len(p_list) * numb_frame_per_iter_per_PT )
 
         self.jparam["fp_task_max"] = len(T_list) * len(p_list) * numb_frame_per_iter_per_PT
         self.jparam["fp_task_min"] = len(T_list) * len(p_list) * 1
 
-    
+    def _set_model_devi_jobs_from_segments(self, segs, *,
+                                           nsteps_per_phase=5,
+                                           init_steps=None,
+                                           press_grid=None,
+                                           trj_freq=20,
+                                           numb_frame_per_iter_per_PT=5,
+                                           ensemble='npt'):
+        if init_steps is None:
+            init_steps = [1000, 2000, 4000, 8000, 16000]
+        if press_grid is None:
+            press_grid = [1, 10, 100, 1000, 10000]
+        init_iters_numb = len(self.jparam["model_devi_jobs"])
+        real_idx = init_iters_numb
+        max_n_p_t = 0
+        min_n_p_t = float('inf')
+        for sys_idx, seg in enumerate(segs):
+            T_explore = seg['T_explore']
+            T_list = _generate_temp_list(T_explore[0], T_explore[1])
+            min_n_p_t = min(min_n_p_t, len(T_list) * len(press_grid) * 1)
+            print(f"\nPhase {seg['label']}: T_explore "
+                  f"{T_explore[0]:.0f}-{T_explore[1]:.0f}K, "
+                  f"{len(T_list)} T points")
+            for iter_idx in range(nsteps_per_phase):
+                if isinstance(init_steps, (list, tuple)):
+                    if real_idx < len(init_steps):
+                        nsteps = init_steps[real_idx]
+                    else:
+                        nsteps = init_steps[-1] * pow(
+                            2, iter_idx - len(init_steps) + 1)
+                else:
+                    nsteps = init_steps
+                new_job = {
+                    "sys_idx": [sys_idx],
+                    "temps": T_list,
+                    "press": press_grid,
+                    "ensemble": ensemble,
+                    "trj_freq": trj_freq,
+                    "nsteps": nsteps,
+                    "_idx": real_idx,
+                }
+                n_p_t = len(T_list) * len(press_grid) * numb_frame_per_iter_per_PT
+                max_n_p_t = max(max_n_p_t, n_p_t)
+                print(f"  Iter. {real_idx} (phase {sys_idx}, "
+                      f"label={seg['label']}): "
+                      f"nsteps={nsteps}, T[{len(T_list)}]xP[{len(press_grid)}]")
+                self.jparam["model_devi_jobs"].append(new_job)
+                real_idx += 1
+        self.jparam["fp_task_max"] = max_n_p_t
+        self.jparam["fp_task_min"] = min_n_p_t
+        print(f"total iters: {real_idx - init_iters_numb}, "
+              f"fp_task_max={self.jparam['fp_task_max']}")
+
+
 def _generate_dpgen_machine_from_file(machine_file, prefix, is_pimd=False, nbeads=8):
 
     with open(machine_file, 'r') as f:

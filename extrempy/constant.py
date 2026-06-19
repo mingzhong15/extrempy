@@ -19,6 +19,7 @@ h = 6.626e-34                            # Planck constant, J*s
 hbar = h/(2*np.pi)                       # reduced Planck constant, J*s
 NA = 6.022e23                            # Avogadro constant, 1/mol
 kb = 1.38e-23                            # Boltzmann constant, J/K
+kb_eV = 8.617e-5                         # Boltzmann constant, eV/K
 aB = 4*np.pi*epsilon0*hbar**2 / (me*e**2)# Bohr radius, m
 Ry = 13.6                                # Ryberg, eV
 

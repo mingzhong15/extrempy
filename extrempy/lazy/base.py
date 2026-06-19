@@ -38,18 +38,16 @@ class InputGenerator:
                 json.dump(job_param, f, indent=4)
 
     def submit(self):
-
+        cwd = os.getcwd()
         os.chdir(self.work_path)
-
         if self.platform == 'bh':
-
             try:
                 os.system('mkdir  ../'+self.job_name)
             except:
                 pass
-
             pwd = 'bohr job submit -i job.json -p ./ -r ../'+self.job_name
             os.system(pwd)
+        os.chdir(cwd)
 
 
 
