@@ -183,6 +183,23 @@ class DPGENGenerator(InputGenerator):
             self.jparam["use_ele_temp"] = 0
             self.jparam["default_training_param"]["model"]["fitting_net"]["numb_fparam"] = 0
 
+    def _optimize_prefix(self):
+        for key, prefix_key, is_nested in [
+            ('init_data_sys', 'init_data_prefix', False),
+            ('sys_configs', 'sys_configs_prefix', True),
+        ]:
+            items = self.jparam[key]
+            if not items:
+                continue
+            paths = [p for sub in items for p in sub] if is_nested else items
+            common = os.path.commonpath(paths)
+            if common == '/':
+                continue
+            self.jparam[prefix_key] = common
+            if is_nested:
+                self.jparam[key] = [[os.path.relpath(p, common) for p in sub] for sub in items]
+            else:
+                self.jparam[key] = [os.path.relpath(p, common) for p in paths]
 
     def _set_model_devi_jobs(self, sys_idx, Tmin, Tmax, Pmin, Pmax,
                              is_pimd=False,

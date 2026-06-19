@@ -247,6 +247,7 @@ class DPBuilder:
         g.jparam["fp_pp_path"] = self.dpgen_dir
         g.jparam["fp_pp_files"] = ['POTCAR']
         g.jparam["fp_incar"] = os.path.join(self.dpgen_dir, 'INCAR')
+        g._optimize_prefix()
         param_path = os.path.join(self.dpgen_dir, 'param.json')
         with open(param_path, 'w') as f:
             json.dump(g.jparam, f, indent=4)
