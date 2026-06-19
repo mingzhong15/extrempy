@@ -95,7 +95,7 @@ class PotcarMap:
         with open(potcar_path, 'r') as f:
             for line in f:
                 if 'ZVAL' in line:
-                    val_str = line.split('=')[-1].strip().rstrip(';')
+                    val_str = line.split('=')[-1].strip().split()[0]
                     return float(val_str)
         raise ValueError(f"No ZVAL found in {potcar_path}")
 
