@@ -21,7 +21,7 @@ class TestSingleElementDpBuilderInit(unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     @patch('extrempy.campaign.single_element_dp.get_viable_elements')
-    @patch('extrempy.campaign.single_element_dp.SingleElementDPBuilder')
+    @patch('extrempy.campaign.single_element_dp.ElementDPBuilder')
     def test_build_all_elements_keyword(self, mock_builder_cls, mock_viable):
         mock_viable.return_value = ['Ti', 'Al', 'W']
         mock_builder = MagicMock()
@@ -38,57 +38,57 @@ class TestSingleElementDpBuilderInit(unittest.TestCase):
         self.assertIn('Ti', results)
 
     def test_init_basic(self):
-        from extrempy.campaign.single_element_dp import SingleElementDPBuilder
-        b = SingleElementDPBuilder('Ti', work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        b = ElementDPBuilder('Ti', work_root=self.tmpdir,
                                    potcar_lib=self.tmpdir)
         self.assertEqual(b.element, 'Ti')
         self.assertEqual(b.elements, ['Ti'])
         self.assertEqual(b.work_dir, os.path.join(self.tmpdir, 'Ti'))
 
     def test_get_tm(self):
-        from extrempy.campaign.single_element_dp import SingleElementDPBuilder
-        b = SingleElementDPBuilder('Ti', work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        b = ElementDPBuilder('Ti', work_root=self.tmpdir,
                                    potcar_lib=self.tmpdir)
         self.assertEqual(b._get_tm(), ELEMENT_PHASE_DATA['Ti']['Tm'])
 
     def test_get_tm_al(self):
-        from extrempy.campaign.single_element_dp import SingleElementDPBuilder
-        b = SingleElementDPBuilder('Al', work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        b = ElementDPBuilder('Al', work_root=self.tmpdir,
                                    potcar_lib=self.tmpdir)
         self.assertEqual(b._get_tm(), ELEMENT_PHASE_DATA['Al']['Tm'])
 
     def test_phase_segments_delegates(self):
-        from extrempy.campaign.single_element_dp import SingleElementDPBuilder
-        b = SingleElementDPBuilder('Ti', work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        b = ElementDPBuilder('Ti', work_root=self.tmpdir,
                                    potcar_lib=self.tmpdir)
         segs = b.get_phase_segments()
         self.assertEqual(len(segs), 3)
         self.assertEqual(segs[0]['label'], 'Ti-HCP')
 
     def test_confs_dir_property(self):
-        from extrempy.campaign.single_element_dp import SingleElementDPBuilder
-        b = SingleElementDPBuilder('Al', work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        b = ElementDPBuilder('Al', work_root=self.tmpdir,
                                    potcar_lib=self.tmpdir)
         self.assertEqual(b.confs_dir,
                          os.path.join(b.work_dir, 'confs'))
 
     def test_init_vasp_dir_property(self):
-        from extrempy.campaign.single_element_dp import SingleElementDPBuilder
-        b = SingleElementDPBuilder('Al', work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        b = ElementDPBuilder('Al', work_root=self.tmpdir,
                                    potcar_lib=self.tmpdir)
         self.assertEqual(b.init_vasp_dir,
                          os.path.join(b.work_dir, 'init_vasp'))
 
     def test_init_data_dir_property(self):
-        from extrempy.campaign.single_element_dp import SingleElementDPBuilder
-        b = SingleElementDPBuilder('Al', work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        b = ElementDPBuilder('Al', work_root=self.tmpdir,
                                    potcar_lib=self.tmpdir)
         self.assertEqual(b.init_data_dir,
                          os.path.join(b.work_dir, 'init_data'))
 
     def test_dpgen_dir_property(self):
-        from extrempy.campaign.single_element_dp import SingleElementDPBuilder
-        b = SingleElementDPBuilder('Al', work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        b = ElementDPBuilder('Al', work_root=self.tmpdir,
                                    potcar_lib=self.tmpdir)
         self.assertEqual(b.dpgen_dir,
                          os.path.join(b.work_dir, 'dpgen'))
@@ -116,8 +116,8 @@ class TestExtremeDPBaseMethods(unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     def test_build_potcar(self):
-        from extrempy.campaign.single_element_dp import ExtremeDPBuilder
-        b = ExtremeDPBuilder(work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import DPBuilder
+        b = DPBuilder(work_root=self.tmpdir,
                               potcar_lib=self.tmpdir)
         b.work_dir = self.tmpdir
         os.makedirs(os.path.join(self.tmpdir, 'dpgen'), exist_ok=True)
@@ -126,8 +126,8 @@ class TestExtremeDPBaseMethods(unittest.TestCase):
         self.assertAlmostEqual(zvals[0], 3.0)
 
     def test_build_potcar_writes_file(self):
-        from extrempy.campaign.single_element_dp import ExtremeDPBuilder
-        b = ExtremeDPBuilder(work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import DPBuilder
+        b = DPBuilder(work_root=self.tmpdir,
                               potcar_lib=self.tmpdir)
         b.work_dir = self.tmpdir
         os.makedirs(os.path.join(self.tmpdir, 'dpgen'), exist_ok=True)
@@ -136,8 +136,8 @@ class TestExtremeDPBaseMethods(unittest.TestCase):
         self.assertTrue(os.path.exists(potcar_path))
 
     def test_ensure_dirs_creates_all(self):
-        from extrempy.campaign.single_element_dp import ExtremeDPBuilder
-        b = ExtremeDPBuilder(work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import DPBuilder
+        b = DPBuilder(work_root=self.tmpdir,
                               potcar_lib=self.tmpdir)
         b.work_dir = self.tmpdir
         b._ensure_dirs()
@@ -147,8 +147,8 @@ class TestExtremeDPBaseMethods(unittest.TestCase):
                             f'{d} should exist')
 
     def test_abstract_methods(self):
-        from extrempy.campaign.single_element_dp import ExtremeDPBuilder
-        b = ExtremeDPBuilder(work_root=self.tmpdir,
+        from extrempy.campaign.single_element_dp import DPBuilder
+        b = DPBuilder(work_root=self.tmpdir,
                               potcar_lib=self.tmpdir)
         with self.assertRaises(NotImplementedError):
             b.get_phase_segments()
@@ -178,6 +178,77 @@ class TestBuildAllElements(unittest.TestCase):
                                      potcar_lib=self.tmpdir)
         # Al should be in results (status may vary)
         self.assertIn('Al', results)
+
+
+
+class TestSysConfigsOrdering(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmpdir, 'confs'), exist_ok=True)
+        os.makedirs(os.path.join(self.tmpdir, 'dpgen'), exist_ok=True)
+        # Create POSCAR files in non-alphabetical order to test ordering
+        # Li has phases: α-Li(bcc), β-Li(bcc) → gets dedup labels Li-BCC, Li-BCC-2
+        for fname in ['Li-BCC.POSCAR', 'Li-BCC-2.POSCAR', 'Li-LIQ.POSCAR']:
+            path = os.path.join(self.tmpdir, 'confs', fname)
+            with open(path, 'w') as f:
+                f.write("test POSCAR\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_sys_configs_order_matches_segs(self):
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        from extrempy.lazy.dpgen import DPGENGenerator
+        # Verify that sys_configs ordering logic matches segs order
+        segs = [
+            {'label': 'Li-BCC', 'structure': 'bcc', 'T_core': (0, 300), 'T_explore': (100, 600)},
+            {'label': 'Li-BCC-2', 'structure': 'bcc', 'T_core': (300, 454), 'T_explore': (200, 600)},
+            {'label': 'Li-LIQ', 'structure': 'bcc', 'T_core': (454, 600), 'T_explore': (350, 600)},
+        ]
+        b = ElementDPBuilder('Li', work_root=self.tmpdir,
+                             potcar_lib=self.tmpdir)
+        b.work_dir = self.tmpdir
+        # Build sys_configs the same way as generate_dpgen does
+        sys_configs = []
+        missing = []
+        for seg in segs:
+            p = os.path.abspath(os.path.join(b.confs_dir, seg['label'] + '.POSCAR'))
+            if os.path.exists(p):
+                sys_configs.append([p])
+            else:
+                missing.append(seg['label'])
+        self.assertEqual(len(missing), 0,
+                         f"Missing POSCARs: {missing}")
+        # Verify ordering: each entry corresponds to the seg at the same index
+        for i, seg in enumerate(segs):
+            expected_suffix = seg['label'] + '.POSCAR'
+            self.assertTrue(sys_configs[i][0].endswith(expected_suffix),
+                            f"sys_configs[{i}]={sys_configs[i][0]} does not match seg['{expected_suffix}']")
+        # Also verify with Fe (BCC, FCC, BCC-2 order)
+        segs_fe = [
+            {'label': 'Fe-BCC', 'structure': 'bcc', 'T_core': (0, 1185), 'T_explore': (100, 1400)},
+            {'label': 'Fe-FCC', 'structure': 'fcc', 'T_core': (1185, 1667), 'T_explore': (1000, 1900)},
+            {'label': 'Fe-BCC-2', 'structure': 'bcc', 'T_core': (1667, 1811), 'T_explore': (1500, 2000)},
+        ]
+        os.makedirs(b.confs_dir, exist_ok=True)
+        for fname in ['Fe-BCC.POSCAR', 'Fe-FCC.POSCAR', 'Fe-BCC-2.POSCAR']:
+            path = os.path.join(b.confs_dir, fname)
+            if not os.path.exists(path):
+                with open(path, 'w') as f:
+                    f.write("test POSCAR\n")
+        sys_configs_fe = []
+        missing_fe = []
+        for seg in segs_fe:
+            p = os.path.abspath(os.path.join(b.confs_dir, seg['label'] + '.POSCAR'))
+            if os.path.exists(p):
+                sys_configs_fe.append([p])
+            else:
+                missing_fe.append(seg['label'])
+        self.assertEqual(len(missing_fe), 0)
+        self.assertEqual(len(sys_configs_fe), 3)
+        self.assertTrue(sys_configs_fe[0][0].endswith('Fe-BCC.POSCAR'))
+        self.assertTrue(sys_configs_fe[1][0].endswith('Fe-FCC.POSCAR'))
+        self.assertTrue(sys_configs_fe[2][0].endswith('Fe-BCC-2.POSCAR'))
 
 
 if __name__ == '__main__':

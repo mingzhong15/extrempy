@@ -42,7 +42,7 @@ class DPBuilder:
         self.encut = encut
         self.nband_scale = nband_scale
         self.nband_min = nband_min
-        self.press_grid = press_grid or [1, 10, 100, 1000, 10000]
+        self.press_grid = press_grid or [1, 10, 100, 1000, 10000]  # bar; adjust upward for extreme high-P
         self.nsteps_per_phase = nsteps_per_phase
         self.init_steps = init_steps or [1000, 2000, 4000, 8000, 16000]
         self.f_trust = f_trust or [0.005, 0.3]
@@ -113,6 +113,10 @@ class DPBuilder:
             label = seg['label']
             is_liquid = label.endswith('-LIQ')
             if is_liquid:
+                if solid_label is None:
+                    raise RuntimeError(
+                        f"Liquid phase '{label}' has no preceding solid phase "
+                        f"to seed the melt POSCAR from.")
                 poscar_ref = solid_label
                 T_ref = int(self.liquid_T_factor * Tm)
             else:
@@ -237,11 +241,23 @@ class DPBuilder:
                     if rel not in g.jparam['init_data_sys']:
                         g.jparam['init_data_sys'].append(rel)
 
-        # Sys configs: always all phases (consistent sys numbering)
-        g._set_sys_configs(set_dir=self.confs_dir,
-                           prefix=self.element + '-*.POSCAR')
+        # Sys configs: use segs ordering (not glob dict order) for sys_idx consistency
+        sys_configs = []
+        missing = []
+        for seg in segs:
+            p = os.path.abspath(os.path.join(self.confs_dir, seg['label'] + '.POSCAR'))
+            if os.path.exists(p):
+                sys_configs.append([p])
+            else:
+                missing.append(seg['label'])
+        if missing:
+            raise FileNotFoundError(
+                f"Missing POSCAR for phases {missing}; run generate_poscars "
+                f"and (for LIQ) collect_init_data first.")
+        g.jparam['sys_configs'] = sys_configs
+        g.jparam['sys_configs_prefix'] = ''
 
-        g._set_model_traninig_settings(stop_batch=200000, is_ele_temp=True)
+        g._set_model_training_settings(stop_batch=200000, is_ele_temp=True)
         g._set_model_devi_settings(dt=0.001, f_trust=self.f_trust,
                                    is_relative=False, epsilon=1.0)
         g.jparam["model_devi_skip"] = self.model_devi_skip
@@ -290,7 +306,8 @@ class DPBuilder:
     def submit_dpgen(self):
         if self.platform == 'slurm':
             print(f"  DPGEN configurations ready: {self.dpgen_dir}")
-            print(f"  Run manually: cd {self.dpgen_dir} && dpgen run param.json")
+            print(f"  machine.json has been generated; run via dpdispatcher:")
+            print(f"    cd {self.dpgen_dir} && dpgen run param.json")
             return
         job_name = (self.element or 'system') + '_dpgen'
         g = self._dpgen_gen
@@ -376,6 +393,11 @@ class ElementDPBuilder(DPBuilder):
 
 
 def build_all_elements(work_root, elements=None, **kwargs):
+    """Batch-submit AIMD for all viable elements.
+
+    Covers: generate_poscars + generate_init_aimd + submit_init_aimd.
+    After AIMD completes, manually run collect_init_data then generate_dpgen/submit_dpgen.
+    """
     if elements is None:
         elements = get_viable_elements()
     results = {}

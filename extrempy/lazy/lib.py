@@ -742,6 +742,8 @@ def get_phase_segments(element, T_range=(300, None), overlap_rule='auto',
     for phase in phases:
         st = phase['structure']
         if st not in SUPPORTED_STRUCTURES:
+            print(f"  WARN: {element} phase '{phase['label']}' structure "
+                  f"'{st}' not in SUPPORTED_STRUCTURES, skipped")
             continue
         if phase['T_max'] < drop_below_T:
             continue

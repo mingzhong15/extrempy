@@ -4,3 +4,4 @@ __pycache__/
 CLAUDE.md
 .claude
 .vscode
+.ipynb_checkpoints/
