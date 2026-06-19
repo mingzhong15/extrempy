@@ -137,7 +137,7 @@ class DPBuilder:
                   if is_liquid else
                   f"  {label}: T_ref={T_ref}K (T_core midpoint)")
 
-    def submit_init_aimd(self):
+    def submit_init_aimd(self, submit=True):
         for label, wd in self._aimd_dirs:
             gen = VASPGenerator(work_path=wd, poscar_file=None)
             job_name = (self.element or 'system') + '-' + label
@@ -145,16 +145,22 @@ class DPBuilder:
                 if self.machine_template and os.path.exists(self.machine_template):
                     gen.generate_submit(self.machine_template, job_name,
                                         platform='slurm')
-                    gen.submit()
-                    print(f"  Submitted: {label} ({wd})")
+                    if submit:
+                        gen.submit()
+                        print(f"  Submitted: {label} ({wd})")
+                    else:
+                        print(f"  Script generated (not submitted): {label} ({wd})")
                 else:
                     print(f"  SKIP submit {label}: no machine_template")
             elif self.platform == 'bh':
                 if self.job_template and os.path.exists(self.job_template):
                     gen.generate_submit(self.job_template, job_name,
                                         platform='bh')
-                    gen.submit()
-                    print(f"  Submitted: {label} ({wd})")
+                    if submit:
+                        gen.submit()
+                        print(f"  Submitted: {label} ({wd})")
+                    else:
+                        print(f"  Script generated (not submitted): {label} ({wd})")
                 else:
                     print(f"  SKIP submit {label}: no job_template")
             else:
