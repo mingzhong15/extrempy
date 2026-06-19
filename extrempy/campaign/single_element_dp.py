@@ -212,7 +212,7 @@ class DPBuilder:
                          prefix=self._init_data_prefix(segs))
         if extra_init_sys:
             for path in extra_init_sys:
-                rel = os.path.relpath(os.path.abspath(path), self.dpgen_dir)
+                rel = os.path.abspath(path)
                 if rel not in g.jparam['init_data_sys']:
                     g.jparam['init_data_sys'].append(rel)
         if extra_init_root:
@@ -220,7 +220,7 @@ class DPBuilder:
             for entry in sorted(os.listdir(root)):
                 sub = os.path.join(root, entry)
                 if self._is_valid_data_dir(sub):
-                    rel = os.path.relpath(sub, self.dpgen_dir)
+                    rel = os.path.abspath(sub)
                     if rel not in g.jparam['init_data_sys']:
                         g.jparam['init_data_sys'].append(rel)
 

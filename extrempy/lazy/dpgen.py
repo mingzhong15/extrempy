@@ -135,7 +135,7 @@ class DPGENGenerator(InputGenerator):
             prefix2 = os.path.join(set_dir, prefix)
             set_list = glob.glob(prefix2)
         for set_path in set_list:
-            relative_path = os.path.relpath(set_path, set_dir)
+            relative_path = os.path.abspath(set_path)
             self.jparam['init_data_sys'].append(relative_path)
 
     def _set_sys_configs(self, set_dir=None, prefix='*.POSCAR'):
@@ -146,7 +146,7 @@ class DPGENGenerator(InputGenerator):
             prefix2 = os.path.join(set_dir, prefix)
             conf_list = glob.glob(prefix2)
         for conf_path in conf_list:
-            relative_path = os.path.relpath(conf_path, set_dir)
+            relative_path = os.path.abspath(conf_path)
             self.jparam["sys_configs"].append([relative_path])
     
     def _set_model_devi_settings(self, dt = 0.001, 
@@ -347,7 +347,7 @@ class DPGENParamGenerator:
 
         for set_path in set_list:
             # Calculate relative path from PWD to set_path
-            relative_path = os.path.relpath(set_path, SET_DIR)
+            relative_path = os.path.abspath(set_path)
             SET_LIST.append(relative_path)
 
         self.jparam["init_data_prefix"] = SET_DIR
