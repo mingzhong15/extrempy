@@ -141,7 +141,7 @@ class VASPGenerator(InputGenerator):
             raise RuntimeError(
                 "potcar_map or potcar_lib_path must be provided "
                 "to generate POTCAR.")
-        _, self.zval_list, _ = self.potcar_map.write_potcar(
+        self.zval_list, _ = self.potcar_map.write_potcar(
             self.atom_names,
             os.path.join(self.work_path, 'POTCAR'))
 
