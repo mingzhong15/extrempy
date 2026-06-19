@@ -1,0 +1,136 @@
+clear
+echo both
+
+#-----------Initial statement----------#
+units           metal  
+boundary        p p p 
+atom_style      atomic 
+
+#---------------Geometrical Configuration----------#
+
+read_data       confs.data
+replicate       {{nx | default('6')}} {{ny | default('6')}} {{nz | default('10')}}
+
+variable        midz equal lz/2
+
+region          box1 block INF INF INF INF INF ${midz} units box
+region          box2 block INF INF INF INF ${midz} INF units box
+
+group           bottom region box1
+group           top region box2
+
+#----------------------simulation set-----------------#
+variable        T1 equal {{Tm_estimate}}
+variable        T2 equal {{T_superheat}}
+variable	    p equal {{pressure | default('0.0001')}}*10000
+
+variable        t equal {{heating_step | default('10000')}}
+
+pair_style      deepmd cp.pb fparam ${T1}
+pair_coeff      * *
+
+{% for element in elements %}
+mass            {{element.id}} {{element.mass}}
+{% endfor %}
+
+timestep        {{dt | default('0.001')}}
+
+neighbor        1 bin
+neigh_modify    every 10 delay 0 check no
+
+#----------------------compute &dump----------------#
+thermo          1000
+thermo_style    custom step time temp press vol density etotal
+
+variable        myTEMP equal temp
+variable        myPRESS equal press
+variable        ETOTAL equal etotal
+variable        VOL equal vol
+variable        RHO equal density
+variable        STEP equal step
+variable        myENTHALPY equal enthalpy
+
+# -------------- compute --------------  # 
+compute 	    cells all chunk/atom bin/1d z lower 0.1 units reduced
+
+compute		    KE all ke/atom
+compute		    PE all pe/atom
+compute 	    STRESS all centroid/stress/atom NULL virial
+compute		    VOL all voronoi/atom
+
+variable	    virial_atom atom -(c_STRESS[1]+c_STRESS[2]+c_STRESS[3])/(3*c_VOL[1])
+
+compute 	    Q all orientorder/atom degrees 2 4 6 cutoff {{Q_cutoff | default('3.0')}}
+
+#----------------------run-----------------#
+# heat to T1
+variable     	y equal ${T1}
+
+velocity       	all create $y 8341 dist gaussian rot yes
+fix             1 all npt temp ${T1} ${T1} 0.1 aniso $p $p 0.5
+run            	10000
+unfix           1
+
+fix             CHUNK all ave/chunk 1 1 1000 cells density/mass temp v_virial_atom c_Q[1] c_Q[2] file chunk.profile
+
+# heat uppper part to obtain liquid phase
+variable        DUMP_STEP equal 5000
+dump            1 all custom ${DUMP_STEP} traj/dump.* id type xu yu zu vx vy vz c_KE c_PE c_Q[2]
+dump_modify     1 sort id
+dump_modify     1 element {% for element in elements %}{{ element.name }} {% endfor %}
+
+fix             1 top npt temp ${T1} ${T2} 0.1 z $p $p 1
+run             $t
+unfix           1
+
+
+fix             1 top npt temp ${T2} ${T2} 0.1 z $p $p 1
+run             $t
+unfix           1
+
+fix             1 top npt temp ${T2} ${T1} 0.1 z $p $p 1  
+run             $t
+unfix           1
+
+fix             1 top npt temp ${T1} ${T1} 0.1 z $p $p 1  
+run             $t
+unfix           1
+
+write_restart   ${T1}.NPT.restart
+
+# evolve
+variable        myTEMP equal temp
+variable        myPRESS equal press
+variable        ETOTAL equal etotal
+variable        VOL equal vol
+variable        RHO equal density
+variable        STEP equal step
+
+
+variable        EQUI_STEP equal {{ equilibrate_step | default('100000') }}
+
+compute         rdfbot bottom rdf 100 
+fix             RDFBOT bottom ave/time 1 1 10000 c_rdfbot[*] file rdf_bottom.txt mode vector
+
+compute         rdftop top rdf 100 
+fix             RDFTOP top ave/time 1 1 10000 c_rdftop[*] file rdf_top.txt mode vector
+
+fix             PRINT all print 100 "${STEP} ${myTEMP} ${myPRESS} ${VOL} ${RHO} ${myENTHALPY} ${ETOTAL}" &
+                      title "# step temp[K] press[bars] vol[A^3] density[gcc] enthalpy[eV] etotal[eV]" &
+                      file thermo.dat screen no
+
+fix             NPT all npt temp ${T1} ${T1} 0.1 aniso $p $p 1
+fix             RMVC all momentum 1000 linear 1 1 1
+
+run             ${EQUI_STEP}
+
+unfix           NPT
+unfix           RMVC
+
+unfix			RDFBOT
+unfix			RDFTOP
+
+unfix			PRINT
+unfix		    CHUNK
+
+write_restart   ${T1}.NPT.restart

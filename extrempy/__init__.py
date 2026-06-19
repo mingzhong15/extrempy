@@ -7,8 +7,11 @@ from .lazy.init_data import (bootstrap_init_data,
                              generate_liquid_poscar_from_contcar,
                              scale_poscar_volume)
 from .campaign.single_element_dp import (DPBuilder,
-                                         ElementDPBuilder,
-                                         build_all_elements)
+                                          ElementDPBuilder,
+                                          build_all_elements)
+from .campaign.melt import (EOSCalculator,
+                             ElementEOSCalculator,
+                             run_eos_all)
 from .structure import (
     generate_element_structure,
     batch_generate_structures,

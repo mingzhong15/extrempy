@@ -1,0 +1,89 @@
+clear
+echo both
+
+#-----------Initial statement----------#
+units           metal  
+boundary        p p p 
+atom_style      atomic 
+
+#---------------Geometrical Configuration----------#
+
+read_data       confs.data
+replicate       {{nx | default('6')}} {{ny | default('6')}} {{nz | default('6')}}
+
+#----------------------simulation set-----------------#
+variable        T equal {{temperature | default('300')}}
+variable	    p equal {{pressure | default('0.0001')}}*10000
+
+variable        t equal {{heating_step | default('10000')}}
+
+pair_style      deepmd cp.pb fparam ${T}
+pair_coeff      * *
+
+{% for element in elements %}
+mass            {{element.id}} {{element.mass}}
+{% endfor %}
+
+timestep        {{dt | default('0.001')}}
+
+neighbor        1 bin
+neigh_modify    every 10 delay 0 check no
+
+#----------------------compute &dump----------------#
+thermo          1000
+thermo_style    custom step time temp press vol density etotal
+
+variable        LX equal lx 
+variable        LY equal ly 
+variable        LZ equal lz 
+
+variable        TEMP equal temp
+variable        PRESS equal press
+variable        ETOTAL equal etotal
+variable        VOL equal vol
+variable        RHO equal density
+variable        STEP equal step
+variable        ENTHALPY equal enthalpy
+
+# -------------------- thermalization -------------------- #
+
+variable     	y equal ${T}
+
+velocity       	all create $y 8341 dist gaussian rot yes
+fix             1 all npt temp ${T} ${T} 0.1 aniso $p $p 0.5
+run            	20000
+unfix           1
+
+ # -------------------- compute -------------------- #
+{% if is_dump %}
+dump            1 all custom {{ dump_freq | default('100') }} traj/dump.* id type xu yu zu vx vy vz
+dump_modify     1 sort id
+dump_modify     1 element {% for element in elements %}{{ element.name }} {% endfor %}
+{% endif %}
+
+
+variable        EQUI_STEP equal {{ equilibrate_step | default('50000') }}
+variable        nrepeat equal ${EQUI_STEP}/100
+
+compute         rdf all rdf 200
+fix             RDF all ave/time 100 100 10000 c_rdf[*] file rdf.txt mode vector
+
+compute         MSD all msd com yes
+variable        myMSD equal c_MSD[4]
+
+fix             THERMOPRINT all print 100 "${STEP} ${TEMP} ${PRESS} ${VOL} ${LX} ${LY} ${LZ} ${RHO} ${ETOTAL} ${ENTHALPY} ${myMSD}" &
+                      title "# step temp[K] press[bars] vol[A^3] Lx[A] Ly[A] Lz[A] density[gcc] etotal[eV] enthalpy[eV]  MSD[ang^2/ps] " &
+                      file thermo.dat screen no
+
+fix             NPT all npt temp ${T} ${T} 0.1 aniso $p $p 0.5
+fix             RMVC all momentum 1000 linear 1 1 1
+
+run             ${EQUI_STEP}
+
+#unfix           NPT
+#unfix           RMVC
+
+#unfix			RDF
+#unfix			THERMOPRINT
+
+#write_restart   ${T}.NPT.restart

@@ -310,3 +310,84 @@ def find_first_peak_rdf_gaussian(r, g_r, r_min=0.5, r_max=5.0):
             'fit_r2': None,
             'error': str(e)
         }
+
+
+def read_rdf_file(filepath):
+    """Parse a LAMMPS fix ave/time RDF output file.
+
+    Returns
+    -------
+    r : ndarray
+        Radial distances.
+    g_r : ndarray
+        RDF values (averaged over all time frames).
+    """
+    with open(filepath) as f:
+        lines = f.readlines()
+
+    nbins = 0
+    data = []
+    for line in lines:
+        parts = line.split()
+        if len(parts) == 2 and nbins == 0:
+            nbins = int(parts[-1])
+        if len(parts) == 4:
+            data.append([float(p) for p in parts[1:3]])
+
+    if nbins == 0 or not data:
+        return None, None
+
+    data = np.array(data).reshape(-1, nbins, 2)
+    averaged = data.mean(axis=0)
+    return averaged[:, 0], averaged[:, 1]
+
+
+def batch_analyze_two_phase(dump_dir, element=None, z_mid=None):
+    """Batch-analyze two-phase dump files and return phase per temperature.
+
+    Parameters
+    ----------
+    dump_dir : str
+        Parent directory containing ``{T}k/`` subdirectories.
+    element : str or None
+        Element label (unused, kept for interface compatibility).
+    z_mid : float or None
+        Midpoint z for ``diagnose_structure_split_z``.
+
+    Returns
+    -------
+    results : dict
+        ``{temperature_K: {'phase': str, 'q4': float, 'q6': float}}``
+    """
+    import os
+    import glob
+
+    results = {}
+    case_dirs = sorted(glob.glob(os.path.join(dump_dir, '*k/')))
+    for case_dir in case_dirs:
+        base = os.path.basename(os.path.normpath(case_dir))
+        try:
+            T = int(base.split('k')[0])
+        except ValueError:
+            continue
+
+        dump_files = sorted(glob.glob(os.path.join(
+            case_dir, 'traj', 'dump.*')))
+        if not dump_files:
+            dump_files = sorted(glob.glob(os.path.join(
+                case_dir, 'dump.*')))
+        if not dump_files:
+            continue
+
+        atoms = read_dump_file(dump_files[-1])
+        if atoms is None:
+            continue
+
+        diag = diagnose_structure_split_z(atoms, z_mid=z_mid)
+        results[T] = {
+            'phase': diag.get('upper_phase', 'unknown'),
+            'q4': diag.get('upper_q4', 0),
+            'q6': diag.get('upper_q6', 0),
+        }
+
+    return results

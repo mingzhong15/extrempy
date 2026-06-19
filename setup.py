@@ -17,6 +17,10 @@ setup(
     author_email='zengqiyu15@163.com',
     license='LGPL',
     packages=find_packages(),
+    package_data={
+        'extrempy.campaign': ['templates/*.j2'],
+    },
+    include_package_data=True,
     install_requires=read_requirements(),
     zip_safe=False
 )

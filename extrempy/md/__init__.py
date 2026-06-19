@@ -10,6 +10,7 @@ from .thermo import (
     process_npt_directories,
     read_dicts_from_file,
     write_dict_to_file,
+    plot_thermo_summary,
     MELT_LIST, MELT_DATA,
 )
 from .traj import (
@@ -20,6 +21,8 @@ from .traj import (
     calculate_q4_q6,
     diagnose_structure_split_z,
     find_first_peak_rdf_gaussian,
+    read_rdf_file,
+    batch_analyze_two_phase,
 )
 
 __all__ = [
@@ -31,9 +34,11 @@ __all__ = [
     "find_first_peak_rdf",
     "process_npt_directories",
     "read_dicts_from_file", "write_dict_to_file",
+    "plot_thermo_summary",
     "MELT_LIST", "MELT_DATA",
     "read_dump_file", "calculate_rdf",
     "find_first_minimum_rdf", "calculate_coordination_number",
     "calculate_q4_q6", "diagnose_structure_split_z",
     "find_first_peak_rdf_gaussian",
+    "read_rdf_file", "batch_analyze_two_phase",
 ]

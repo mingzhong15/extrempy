@@ -349,6 +349,55 @@ def write_dict_to_file(filename, data_dict):
         f.write(str(data_dict) + '\n')
 
 
+def plot_thermo_summary(summary, element, ax=None):
+    """Plot temperature vs volume, density, and energy from NPT summary.
+
+    Parameters
+    ----------
+    summary : pandas.DataFrame
+        Output of ``process_npt_directories()``.
+    element : str
+        Element label for titles.
+    ax : array of matplotlib.axes.Axes or None
+        If None, create new figure with 3 subplots.
+    """
+    import matplotlib.pyplot as plt
+
+    if ax is None:
+        fig, ax = plt.subplots(1, 3, figsize=(12, 3.5))
+    if not isinstance(ax, (list, np.ndarray)):
+        ax = [ax]
+
+    cols = summary.columns
+    vol_col = next((c for c in cols if 'VOL' in c or 'vol' in c), None)
+    rho_col = next((c for c in cols if 'RHO' in c or 'rho' in c or 'density' in c), None)
+    ener_col = next((c for c in cols if 'ETOTAL' in c or 'etotal' in c or 'energy' in c), None)
+
+    for i, (ycol, ylabel) in enumerate(zip(
+            [vol_col, rho_col, ener_col],
+            ['Volume (A^3)', 'Density (g/cc)', 'Energy (eV)'])):
+        if ycol is None or ycol not in cols:
+            continue
+        mean_col = ycol if ycol.endswith('_mean') else f'{ycol}_mean'
+        std_col = ycol.replace('_mean', '_std') if '_mean' in ycol else f'{ycol}_std'
+
+        if mean_col in cols:
+            for phase in summary['phase'].unique():
+                mask = summary['phase'] == phase
+                x = summary.loc[mask, 'temperature']
+                y = summary.loc[mask, mean_col]
+                yerr = summary.loc[mask, std_col] if std_col in cols else None
+                ax[i].errorbar(x, y, yerr=yerr, fmt='o-', label=phase, capsize=3)
+
+        ax[i].set_xlabel('Temperature (K)')
+        ax[i].set_ylabel(ylabel)
+        ax[i].set_title(f'{element} — {ylabel}')
+        ax[i].legend()
+        ax[i].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+
 # Predefined experimental and DP melting points (from notebook melt_list)
 MELT_DATA = {
     'fcc': {
@@ -385,6 +434,6 @@ MELT_DATA = {
 }
 
 MELT_LIST = {}
-for phase_data in MELT_DATA.values():
+for phase, phase_data in MELT_DATA.items():
     for elem, data in phase_data.items():
-        MELT_LIST[elem] = {**data, 'phase': elem}
+        MELT_LIST[elem] = {**data, 'phase': phase}
