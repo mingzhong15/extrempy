@@ -220,8 +220,12 @@ class DPBuilder:
         g = DPGENGenerator(work_path=self.dpgen_dir, type_map=type_map)
 
         # Init data: AIMD collected (if any) + extra
-        g._set_init_data(set_dir=self.dpgen_dir,
-                         prefix=self._init_data_prefix(segs))
+        for entry in sorted(os.listdir(self.init_data_dir)):
+            sub = os.path.join(self.init_data_dir, entry)
+            if self._is_valid_data_dir(sub):
+                rel = os.path.abspath(sub)
+                if rel not in g.jparam['init_data_sys']:
+                    g.jparam['init_data_sys'].append(rel)
         if extra_init_sys:
             for path in extra_init_sys:
                 rel = os.path.abspath(path)
@@ -274,11 +278,6 @@ class DPBuilder:
         self.jparam = g.jparam
         self._dpgen_gen = g
         return g
-
-    def _init_data_prefix(self, segs):
-        return os.path.join(
-            os.path.relpath(self.init_data_dir, self.dpgen_dir),
-            segs[0]['label'].split('-')[0] + '*')
 
     def _write_fp_incar(self, g):
         d = _incar_dict('scf', encut=self.encut, nbands=2,
