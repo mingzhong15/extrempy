@@ -174,9 +174,20 @@ class DPBuilder:
         self._init_data_sys = results
         return results
 
+    @staticmethod
+    def _is_valid_data_dir(path):
+        if not os.path.isdir(path):
+            return False
+        if not os.path.isfile(os.path.join(path, 'type.raw')):
+            return False
+        for entry in os.listdir(path):
+            if entry.startswith('set.') and os.path.isdir(os.path.join(path, entry)):
+                return True
+        return False
+
     # ---- DPGEN ----
     def generate_dpgen(self, segs, elements=None,
-                       extra_init_sys=None,
+                       extra_init_sys=None, extra_init_root=None,
                        phase_ids=None, phase_labels=None):
         if elements is None:
             elements = self.elements
@@ -202,6 +213,14 @@ class DPBuilder:
                 rel = os.path.relpath(os.path.abspath(path), self.dpgen_dir)
                 if rel not in g.jparam['init_data_sys']:
                     g.jparam['init_data_sys'].append(rel)
+        if extra_init_root:
+            root = os.path.abspath(extra_init_root)
+            for entry in sorted(os.listdir(root)):
+                sub = os.path.join(root, entry)
+                if self._is_valid_data_dir(sub):
+                    rel = os.path.relpath(sub, self.dpgen_dir)
+                    if rel not in g.jparam['init_data_sys']:
+                        g.jparam['init_data_sys'].append(rel)
 
         # Sys configs: only for selected phases
         if phase_ids is not None or phase_labels is not None:
