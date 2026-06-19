@@ -22,6 +22,7 @@ class ExtremeDPBuilder:
 
     def __init__(self, work_root, potcar_lib, potcar_set='PBE54',
                  machine_template=None, job_template=None,
+                 platform='bh',
                  raw_to_set_script='/share/zeng/template/raw_to_set.sh',
                  encut=600, nband_scale=1.2, nband_min=5,
                  press_grid=None,
@@ -58,6 +59,7 @@ class ExtremeDPBuilder:
         self.low_T_stride = low_T_stride
         self.high_T_stride = high_T_stride
         self.high_T_threshold = high_T_threshold
+        self.platform = platform
         self.potcar_map = PotcarMap(potcar_set, potcar_lib)
         self.jparam = None
         self.work_dir = work_root
@@ -138,13 +140,24 @@ class ExtremeDPBuilder:
         for label, wd in self._aimd_dirs:
             gen = VASPGenerator(work_path=wd, poscar_file=None)
             job_name = (self.element or 'system') + '-' + label
-            if self.job_template and os.path.exists(self.job_template):
-                gen.generate_submit(self.job_template, job_name,
-                                    platform='bh')
-                gen.submit()
-                print(f"  Submitted: {label} ({wd})")
+            if self.platform == 'slurm':
+                if self.machine_template and os.path.exists(self.machine_template):
+                    gen.generate_submit(self.machine_template, job_name,
+                                        platform='slurm')
+                    gen.submit()
+                    print(f"  Submitted: {label} ({wd})")
+                else:
+                    print(f"  SKIP submit {label}: no machine_template")
+            elif self.platform == 'bh':
+                if self.job_template and os.path.exists(self.job_template):
+                    gen.generate_submit(self.job_template, job_name,
+                                        platform='bh')
+                    gen.submit()
+                    print(f"  Submitted: {label} ({wd})")
+                else:
+                    print(f"  SKIP submit {label}: no job_template")
             else:
-                print(f"  SKIP submit {label}: no job_template")
+                print(f"  SKIP submit {label}: unknown platform '{self.platform}'")
 
     # ---- collect init data ----
     def collect_init_data(self, segs):
@@ -223,6 +236,10 @@ class ExtremeDPBuilder:
             f.write(content)
 
     def submit_dpgen(self):
+        if self.platform == 'slurm':
+            print(f"  DPGEN configurations ready: {self.dpgen_dir}")
+            print(f"  Run manually: cd {self.dpgen_dir} && dpgen run param.json")
+            return
         job_name = (self.element or 'system') + '_dpgen'
         g = self._dpgen_gen
         g.generate_submit(job_template_path=self.job_template, job_name=job_name,
