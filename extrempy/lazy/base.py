@@ -42,19 +42,32 @@ class InputGenerator:
             self._generate_slurm_submit(job_template_path, job_name)
 
     def _generate_slurm_submit(self, machine_json_path, job_name):
-        """Generate sbatch script from dpgen machine.json FP section."""
+        """Generate sbatch script from dpgen machine.json FP section.
+
+        Supports two formats:
+          1. dpdispatcher 'batch' dict: machine.batch.slurm_partition, ...
+          2. dpdispatcher 'resources' dict: resources.queue_name, ...
+        """
         with open(machine_json_path, 'r') as f:
             machine = json.load(f)
         fp_conf = machine.get('fp', [{}])[0]
+        resources = fp_conf.get('resources', {})
         batch = fp_conf.get('machine', {}).get('batch', {})
         command = fp_conf.get('command', 'mpirun vasp_std')
+        custom_flags = resources.get('custom_flags', [])
 
-        partition = batch.get('slurm_partition', '')
-        nodes = batch.get('slurm_nodes', 1)
-        ntasks = batch.get('slurm_ntasks_per_node', 32)
-        wall_time = batch.get('slurm_time', '24:00:00')
-        gres = batch.get('slurm_gres', '')
-        extra = batch.get('slurm_args', '')
+        if batch:
+            partition = batch.get('slurm_partition', '')
+            nodes = batch.get('slurm_nodes', 1)
+            ntasks = batch.get('slurm_ntasks_per_node', 32)
+            wall_time = batch.get('slurm_time', '24:00:00')
+            gres = batch.get('slurm_gres', '')
+            extra = batch.get('slurm_args', '')
+        else:
+            partition = resources.get('queue_name', '')
+            nodes = resources.get('number_node', 1)
+            ntasks = resources.get('cpu_per_node', 32)
+            wall_time = ''
 
         lines = ['#!/bin/bash']
         lines.append(f'#SBATCH -J {job_name}')
@@ -62,11 +75,12 @@ class InputGenerator:
             lines.append(f'#SBATCH -p {partition}')
         lines.append(f'#SBATCH -N {nodes}')
         lines.append(f'#SBATCH --ntasks-per-node={ntasks}')
-        lines.append(f'#SBATCH -t {wall_time}')
-        if gres:
-            lines.append(f'#SBATCH --gres={gres}')
-        if extra:
-            lines.append(f'#SBATCH {extra}')
+        if wall_time:
+            lines.append(f'#SBATCH -t {wall_time}')
+        for flag in custom_flags:
+            flag = flag.strip()
+            if flag.startswith('#SBATCH') and '--job-name' not in flag:
+                lines.append(flag)
         lines.append('')
         lines.append(f'cd {self.work_path}')
         lines.append('')
