@@ -538,10 +538,25 @@ def _generate_dpgen_machine_from_file(machine_file, prefix, is_pimd=False, nbead
     with open(machine_file, 'r') as f:
         machine_param = json.load(f)
 
-    machine_param['train'][0]['machine']['remote_profile']['input_data']['job_name'] = prefix + '_dpgen_dp'
-    machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['job_name'] = prefix + '_dpgen_md'
-    machine_param['fp'][0]['machine']['remote_profile']['input_data']['job_name'] = prefix + '_dpgen_fp'
-    
+    sections = [('train', 'dp'), ('model_devi', 'md'), ('fp', 'fp')]
+    for section, suffix in sections:
+        job_name = prefix + '_dpgen_' + suffix
+
+        # Bohrium: set job_name via remote_profile
+        try:
+            machine_param[section][0]['machine']['remote_profile']['input_data']['job_name'] = job_name
+        except (KeyError, TypeError):
+            pass
+
+        # Slurm: replace --job-name in custom_flags
+        try:
+            flags = machine_param[section][0].get('resources', {}).get('custom_flags', [])
+        except (KeyError, TypeError):
+            flags = []
+        for i, flag in enumerate(flags):
+            if flag.strip().startswith('#SBATCH --job-name='):
+                flags[i] = f'#SBATCH --job-name={job_name}'
+
     if not is_pimd:
         machine_param['model_devi'][0]['command'] = 'lmp -i input.lammps -v restart 0'
     else:
@@ -556,8 +571,11 @@ def _generate_dpgen_machine_from_file(machine_file, prefix, is_pimd=False, nbead
         else:
             raise ValueError('nbeads must be 8, 16, or 32')
 
-        machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['scass_type'] = gpu_type
-        machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['image_address'] = 'registry.dp.tech/dptech/dpmd:2.2.8-cuda12.0'
+        try:
+            machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['scass_type'] = gpu_type
+            machine_param['model_devi'][0]['machine']['remote_profile']['input_data']['image_address'] = 'registry.dp.tech/dptech/dpmd:2.2.8-cuda12.0'
+        except (KeyError, TypeError):
+            pass
     
     return machine_param
 
