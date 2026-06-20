@@ -89,7 +89,6 @@ class InputGenerator:
         sbatch_path = os.path.join(self.work_path, 'job.sbatch')
         with open(sbatch_path, 'w') as f:
             f.write('\n'.join(lines) + '\n')
-        print(f"  sbatch script written: {sbatch_path}")
 
     def submit(self):
         cwd = os.getcwd()

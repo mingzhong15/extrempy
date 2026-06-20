@@ -107,7 +107,7 @@ class PotcarMap:
                     return line.strip()
         raise ValueError(f"No TITEL found in {potcar_path}")
 
-    def build(self, elements):
+    def build(self, elements, quiet=False):
         potcar_paths = []
         zval_list = []
         for element in elements:
@@ -123,12 +123,14 @@ class PotcarMap:
                         f"but {path} has {zval}")
             else:
                 entry['ZVAL'] = zval
-            if variant_used != entry.get('variant', '') and entry.get('variant') is not None:
-                print(f"NOTE: {element} prefers variant '{entry.get('variant')}', "
-                      f"but using '{variant_used}' (auto fallback)")
+            if not quiet:
+                if variant_used != entry.get('variant', '') and entry.get('variant') is not None:
+                    print(f"NOTE: {element} prefers variant '{entry.get('variant')}', "
+                          f"but using '{variant_used}' (auto fallback)")
             zval_list.append(zval)
             potcar_paths.append(path)
-            print(f"  {element}: ZVAL={zval:g}, TITEL={titel}")
+            if not quiet:
+                print(f"  {element}: ZVAL={zval:g}, TITEL={titel}")
         potcar_text = b''
         for path in potcar_paths:
             with open(path, 'rb') as f:
@@ -136,7 +138,7 @@ class PotcarMap:
         return potcar_text, zval_list, potcar_paths
 
     def write_potcar(self, elements, output_path):
-        text, zvals, paths = self.build(elements)
+        text, zvals, paths = self.build(elements, quiet=True)
         with open(output_path, 'wb') as f:
             f.write(text)
         return zvals, paths

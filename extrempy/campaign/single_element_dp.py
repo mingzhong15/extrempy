@@ -104,12 +104,25 @@ class DPBuilder:
     def generate_init_aimd(self, segs, elements=None):
         if elements is None:
             elements = self.elements
-        self.potcar_map.build(elements)  # validate ZVAL, no file write
+        self.potcar_map.build(elements, quiet=True)  # validate ZVAL, no file write
         self._ensure_dirs()
         Tm = self._get_tm()
+        # POTCAR summary
+        path, variant_used = self.potcar_map._resolve_path(elements[0])
+        zval = PotcarMap._parse_zval(path)
+        potcar_label = f"{elements[0]}{variant_used}" if variant_used else elements[0]
+        print("-- POTCAR --")
+        preferred = self.potcar_map.map[elements[0]].get('variant', '')
+        if variant_used != preferred and preferred:
+            print(f"  {potcar_label} (ZVAL={zval:g})  "
+                  f"[!] prefers '{preferred}' variant, using '{variant_used}' (auto fallback)")
+        else:
+            print(f"  {potcar_label} (ZVAL={zval:g})")
+        # AIMD init header
+        print(f"-- AIMD Init ({len(segs)} jobs) --")
         self._aimd_dirs = []
         solid_label = None
-        for seg in segs:
+        for i, seg in enumerate(segs):
             label = seg['label']
             is_liquid = label.endswith('-LIQ')
             if is_liquid:
@@ -140,12 +153,14 @@ class DPBuilder:
             gen.generate_incar(md_steps=self.aimd_steps, dt=self.aimd_dt,
                                latt_temp=T_ref, mode='aimd-ttm')
             self._aimd_dirs.append((job_label, work_dir, label))
-            print(f"  {job_label}: T_ref={T_ref}K (1.8Tm={1.8*Tm:.0f})"
+            print(f"  [{i}] {job_label}: T_ref={T_ref}K (1.8Tm={1.8*Tm:.0f})"
                   if is_liquid else
-                  f"  {job_label}: T_ref={T_ref}K (T_core midpoint)")
+                  f"  [{i}] {job_label}: T_ref={T_ref}K (T_core midpoint)")
 
     def submit_init_aimd(self, submit=True):
-        for jl, wd, *_ in self._aimd_dirs:
+        status = "submitted" if submit else "not submitted"
+        print(f"-- sbatch ({status}) --")
+        for i, (jl, wd, *_) in enumerate(self._aimd_dirs):
             gen = VASPGenerator(work_path=wd, poscar_file=None)
             job_name = (self.element or 'system') + '-' + jl
             if self.platform == 'slurm':
@@ -154,24 +169,24 @@ class DPBuilder:
                                         platform='slurm')
                     if submit:
                         gen.submit()
-                        print(f"  Submitted: {jl} ({wd})")
+                        print(f"  [{i}] {jl}: sbatch submitted")
                     else:
-                        print(f"  Script generated (not submitted): {jl} ({wd})")
+                        print(f"  [{i}] {jl} \u2192 job.sbatch")
                 else:
-                    print(f"  SKIP submit {jl}: no machine_template")
+                    print(f"  [{i}] {jl}: no machine_template, skip")
             elif self.platform == 'bh':
                 if self.job_template and os.path.exists(self.job_template):
                     gen.generate_submit(self.job_template, job_name,
                                         platform='bh')
                     if submit:
                         gen.submit()
-                        print(f"  Submitted: {jl} ({wd})")
+                        print(f"  [{i}] {jl}: bh submitted")
                     else:
-                        print(f"  Script generated (not submitted): {jl} ({wd})")
+                        print(f"  [{i}] {jl} \u2192 job.json")
                 else:
-                    print(f"  SKIP submit {jl}: no job_template")
+                    print(f"  [{i}] {jl}: no job_template, skip")
             else:
-                print(f"  SKIP submit {jl}: unknown platform '{self.platform}'")
+                print(f"  [{i}] {jl}: unknown platform '{self.platform}', skip")
 
     # ---- collect init data ----
     def collect_init_data(self, segs):
@@ -340,7 +355,7 @@ class ElementDPBuilder(DPBuilder):
     def get_phase_segments(self):
         segs = get_phase_segments(self.element)
         Tm = self._get_tm()
-        print(f"Element: {self.element}, Tm={Tm}K, {len(segs)} phase segment(s)")
+        print(f"-- Phase Segments --  {self.element} (Tm={Tm}K, {len(segs)} phases)")
         for i, s in enumerate(segs):
             tc = s['T_core']
             te = s['T_explore']
@@ -365,31 +380,32 @@ class ElementDPBuilder(DPBuilder):
         }
         self._ensure_dirs()
         self._segs = segs
+        print("-- POSCAR --")
         solid_poscar_path = None
         for seg in segs:
             label = seg['label']
             st = seg['structure']
             out_path = os.path.join(self.confs_dir, label + '.POSCAR')
             if seg['label'].endswith('-LIQ'):
-                print(f"  SKIP {label}: generated from AIMD CONTCAR")
+                print(f"  - {label}: from AIMD CONTCAR (placeholder)")
                 continue
             sc = DEFAULT_SUPERCELL.get(st, (3, 3, 3))
             if os.path.exists(out_path):
-                print(f"  SKIP {label}: POSCAR already exists")
+                print(f"  - {label}: POSCAR exists")
                 solid_poscar_path = out_path
                 continue
-            generate_element_structure(
+            atoms, _ = generate_element_structure(
                 element=self.element,
                 output_dir=self.confs_dir,
                 supercell=sc,
                 structure_type=st,
-                verbose=True)
+                verbose=False)
             generated = glob.glob(os.path.join(
                 self.confs_dir, self.element + '-' + st.upper() + '*.POSCAR'))
             if generated and os.path.basename(generated[0]) != label + '.POSCAR':
                 os.rename(generated[0], out_path)
             solid_poscar_path = out_path
-            print(f"  POSCAR: {out_path}")
+            print(f"  \u2713 {os.path.basename(out_path)} ({len(atoms)} atoms)")
 
 
 def build_all_elements(work_root, elements=None, **kwargs):
@@ -409,8 +425,8 @@ def build_all_elements(work_root, elements=None, **kwargs):
             b.generate_init_aimd(segs)
             b.submit_init_aimd()
             results[el] = {'status': 'aimd_submitted', 'builder': b}
-            print(f"[{el}] AIMD submitted")
+            print(f"[{el}] AIMD submitted\n")
         except Exception as e:
             results[el] = {'status': 'error', 'msg': str(e)}
-            print(f"[{el}] ERROR: {e}")
+            print(f"[{el}] ERROR: {e}\n")
     return results

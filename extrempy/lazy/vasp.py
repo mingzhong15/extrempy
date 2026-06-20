@@ -130,9 +130,6 @@ class VASPGenerator(InputGenerator):
             self.atom_names = sys.get_atom_names()
             shutil.copy(self.poscar_file,
                         os.path.join(self.work_path, 'POSCAR'))
-            for i in range(len(self.atom_names)):
-                print('POSCAR contains %d ' % (self.numb_atom[i])
-                      + self.atom_names[i] + ' atoms')
         except Exception:
             print('POSCAR file is not found or unreadable')
 
