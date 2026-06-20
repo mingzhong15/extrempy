@@ -725,7 +725,7 @@ def get_viable_elements():
 
 
 def get_phase_segments(element, T_range=(300, None), overlap_rule='auto',
-                       drop_below_T=200):
+                       drop_below_T=200, skip_unsupported=True):
     data = ELEMENT_PHASE_DATA.get(element)
     if data is None:
         raise ValueError(f"Element '{element}' not in ELEMENT_PHASE_DATA")
@@ -741,7 +741,7 @@ def get_phase_segments(element, T_range=(300, None), overlap_rule='auto',
     segs = []
     for phase in phases:
         st = phase['structure']
-        if st not in SUPPORTED_STRUCTURES:
+        if skip_unsupported and st not in SUPPORTED_STRUCTURES:
             print(f"  WARN: {element} phase '{phase['label']}' structure "
                   f"'{st}' not in SUPPORTED_STRUCTURES, skipped")
             continue

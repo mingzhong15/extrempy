@@ -16,6 +16,7 @@ from .structure import (
     generate_element_structure,
     batch_generate_structures,
     generate_all_typical_elements,
+    prepare_confs,
 )
 
 def start():

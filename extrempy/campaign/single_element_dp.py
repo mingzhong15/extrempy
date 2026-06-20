@@ -8,7 +8,7 @@ from extrempy.lazy.dpgen import (DPGENGenerator,
                                  _generate_dpgen_machine_from_file,
                                  _generate_temp_list)
 from extrempy.lazy.lib import (get_phase_segments, get_viable_elements,
-                               ELEMENT_PHASE_DATA)
+                               ELEMENT_PHASE_DATA, SUPPORTED_STRUCTURES)
 from extrempy.lazy.potcar_map import PotcarMap
 from extrempy.lazy.init_data import (bootstrap_init_data,
                                      generate_liquid_poscar_from_contcar,
@@ -394,6 +394,12 @@ class ElementDPBuilder(DPBuilder):
                 print(f"  - {label}: POSCAR exists")
                 solid_poscar_path = out_path
                 continue
+            if st not in SUPPORTED_STRUCTURES:
+                raise FileNotFoundError(
+                    f"{out_path} not found. Structure type '{st}' is not "
+                    f"ASE-generatable.\n"
+                    f"  Use prepare_confs({self.element!r}, work_root=..., "
+                    f"structure_sources=[...]) to populate from external sources.")
             atoms, _ = generate_element_structure(
                 element=self.element,
                 output_dir=self.confs_dir,

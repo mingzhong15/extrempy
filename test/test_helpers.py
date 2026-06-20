@@ -51,6 +51,7 @@ def setup_mocks():
     sys.modules['ase'].build.make_supercell = MagicMock()
     sys.modules['ase'].io = types.ModuleType('ase.io')
     sys.modules['ase'].io.write = MagicMock()
+    sys.modules['ase'].io.read = MagicMock()
     sys.modules['ase'].Atoms = MagicMock()
     sys.modules['ase.build'] = sys.modules['ase'].build
     sys.modules['ase.io'] = sys.modules['ase'].io
