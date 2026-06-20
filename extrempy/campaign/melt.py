@@ -32,7 +32,7 @@ class EOSCalculator:
         Root directory for all element data.
     dpgen_dir : str or None
         DPGEN project root.  Auto-discovers DP model from
-        ``{dpgen_dir}/{element}_sample/iter.*/00.train/000/`` and POSCAR
+        ``{dpgen_dir}/{element}/dpgen/iter.*/00.train/000/`` and POSCAR
         from ``{dpgen_dir}/{element}/confs/*.POSCAR``.
     dp_model_path : str or None
         Explicit path to ``frozen_model.pb``.  Overrides all other search.
@@ -151,7 +151,7 @@ class EOSCalculator:
             for name in ['frozen_model_compressed.pb', 'frozen_model.pb']:
                 pat = os.path.join(
                     self.dpgen_dir,
-                    f'{self.element}_sample/iter.*/00.train/000/',
+                    f'{self.element}/dpgen/iter.*/00.train/000/',
                     name)
                 files = sorted(glob.glob(pat))
                 if files:
