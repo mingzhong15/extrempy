@@ -10,6 +10,66 @@ def fermi_dirac(E, mu, T):
     return 1/(np.exp((E-mu)/(kb*T*J2eV)) + 1)
 
 
+def parse_machine_json(path, section='model_devi'):
+    """Extract Slurm configuration from a dpgen-style ``machine.json``.
+
+    Supports two formats:
+      1. **batch** format — ``machine.batch.{slurm_partition, …}`` (dpdispatcher output)
+      2. **resources** format — ``resources.{queue_name, number_node, …}``
+
+    Parameters
+    ----------
+    path : str
+        Path to ``machine.json`` (``~`` is expanded).
+    section : str
+        JSON top-level key to read, e.g. ``'model_devi'`` or ``'fp'``.
+
+    Returns
+    -------
+    dict
+        Keys: ``partition``, ``nodes``, ``ntasks_per_node``, ``wall_time``,
+        ``gres``, ``command``, ``source_list``, ``custom_flags``, ``envs``.
+        Missing values are ``None``.
+    """
+    with open(os.path.expanduser(path)) as f:
+        machine = json.load(f)
+
+    raw = machine.get(section)
+    if isinstance(raw, list):
+        raw = raw[0] if raw else {}
+    if not raw:
+        raw = {}
+
+    res = raw.get('resources', {})
+    bat = raw.get('machine', {}).get('batch', {})
+
+    cfg = {}
+
+    if bat:
+        # dpdispatcher batch format
+        cfg['partition'] = bat.get('slurm_partition')
+        cfg['nodes'] = bat.get('slurm_nodes') or res.get('number_node')
+        cfg['ntasks_per_node'] = (bat.get('slurm_ntasks_per_node')
+                                  or res.get('cpu_per_node'))
+        cfg['wall_time'] = bat.get('slurm_time')
+        cfg['gres'] = bat.get('slurm_gres')
+    else:
+        # resources format (common for model_devi on Slurm clusters)
+        cfg['partition'] = res.get('queue_name')
+        cfg['nodes'] = res.get('number_node')
+        cfg['ntasks_per_node'] = res.get('cpu_per_node')
+        cfg['wall_time'] = None
+        ngpu = res.get('gpu_per_node', 0)
+        cfg['gres'] = f'gpu:{ngpu}' if ngpu else None
+
+    cfg['command'] = raw.get('command')
+    cfg['source_list'] = res.get('source_list', [])
+    cfg['custom_flags'] = res.get('custom_flags', [])
+    cfg['envs'] = res.get('envs', {})
+
+    return cfg
+
+
 class InputGenerator:
 
     def __init__(self, work_path):
@@ -42,32 +102,15 @@ class InputGenerator:
             self._generate_slurm_submit(job_template_path, job_name)
 
     def _generate_slurm_submit(self, machine_json_path, job_name):
-        """Generate sbatch script from dpgen machine.json FP section.
+        """Generate sbatch script from dpgen machine.json FP section."""
+        tmpl = parse_machine_json(machine_json_path, section='fp')
 
-        Supports two formats:
-          1. dpdispatcher 'batch' dict: machine.batch.slurm_partition, ...
-          2. dpdispatcher 'resources' dict: resources.queue_name, ...
-        """
-        with open(machine_json_path, 'r') as f:
-            machine = json.load(f)
-        fp_conf = machine.get('fp', [{}])[0]
-        resources = fp_conf.get('resources', {})
-        batch = fp_conf.get('machine', {}).get('batch', {})
-        command = fp_conf.get('command', 'mpirun vasp_std')
-        custom_flags = resources.get('custom_flags', [])
-
-        if batch:
-            partition = batch.get('slurm_partition', '')
-            nodes = batch.get('slurm_nodes', 1)
-            ntasks = batch.get('slurm_ntasks_per_node', 32)
-            wall_time = batch.get('slurm_time', '24:00:00')
-            gres = batch.get('slurm_gres', '')
-            extra = batch.get('slurm_args', '')
-        else:
-            partition = resources.get('queue_name', '')
-            nodes = resources.get('number_node', 1)
-            ntasks = resources.get('cpu_per_node', 32)
-            wall_time = ''
+        partition = tmpl.get('partition') or ''
+        nodes = tmpl.get('nodes') or 1
+        ntasks = tmpl.get('ntasks_per_node') or 32
+        wall_time = tmpl.get('wall_time') or ''
+        command = tmpl.get('command') or 'mpirun vasp_std'
+        custom_flags = tmpl.get('custom_flags', [])
 
         lines = ['#!/bin/bash']
         lines.append(f'#SBATCH -J {job_name}')

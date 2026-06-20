@@ -1,11 +1,11 @@
 import os
 import glob
-import json
 import subprocess
 import numpy as np
 
 from extrempy.lazy.lammps import LAMMPSGenerator
 from extrempy.lazy.lib import _get_mass_map, ELEMENT_PHASE_DATA
+from extrempy.lazy.base import parse_machine_json
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 
@@ -42,21 +42,23 @@ class EOSCalculator:
         Directory to glob ``{element}-*POSCAR``.  Falls back to
         ``dpgen_dir/{element}/confs/`` if not set.
     machine_template : str or None
-        dpgen-style ``machine.json`` for slurm resource defaults (partition,
-        nodes, walltime, …).  Extracted values are overridden by constructor
-        parameters.
+        dpgen-style ``machine.json`` — primary source for slurm resources
+        (partition, nodes, ``source_list`` for env setup, etc.).
+        Constructor parameters with a non-``None`` value override these.
     partition : str or None
-        Slurm partition.
-    nodes : int
-        Number of nodes.
-    ntasks_per_node : int
-        Tasks (MPI ranks) per node.
-    wall_time : str
-        Wall time in ``'HH:MM:SS'`` format.
+        Slurm partition (overrides ``machine_template``).
+    nodes : int or None
+        Number of nodes (overrides ``machine_template``).
+    ntasks_per_node : int or None
+        Tasks (MPI ranks) per node (overrides ``machine_template``).
+    wall_time : str or None
+        Wall time in ``'HH:MM:SS'`` format (overrides ``machine_template``).
     gres : str or None
-        Generic resource scheduling, e.g. ``'gpu:1'``.
-    lmp_command : str
-        LAMMPS executable and arguments.  Default: ``'lmp -in run.in > log.run'``.
+        Generic resource scheduling, e.g. ``'gpu:1'`` (overrides ``machine_template``).
+    lmp_command : str or None
+        LAMMPS command, e.g. ``'lmp -in run.in > log.run'``.
+        Defaults to ``'lmp -in run.in > log.run'`` if neither
+        constructor nor ``machine_template`` specify it.
     template_dir : str or None
         Jinja2 template directory.  Defaults to the built-in templates
         shipped with the package (``extrempy/campaign/templates/``).
@@ -72,11 +74,11 @@ class EOSCalculator:
                  # slurm resources (machine_template provides defaults)
                  machine_template=None,
                  partition=None,
-                 nodes=1,
-                 ntasks_per_node=32,
-                 wall_time='24:00:00',
+                 nodes=None,
+                 ntasks_per_node=None,
+                 wall_time=None,
                  gres=None,
-                 lmp_command='lmp -in run.in > log.run',
+                 lmp_command=None,
 
                  # templates (built-in by default)
                  template_dir=None,
@@ -238,53 +240,47 @@ class EOSCalculator:
                 mass=_get_mass_map([self.element])[0])])
 
     def _resolve_slurm_config(self):
-        """Read machine_template (if given) as defaults, then apply overrides.
+        """Build Slurm config with priority: machine_template → constructor → fallback.
 
         Returns dict with keys: partition, nodes, ntasks_per_node,
-        wall_time, gres, command.
+        wall_time, gres, command, source_list, custom_flags, envs.
         """
+        # ---- Phase 1: hardcoded fallback defaults ----
         cfg = dict(
-            partition=self.partition,
-            nodes=self.nodes,
-            ntasks_per_node=self.ntasks_per_node,
-            wall_time=self.wall_time,
-            gres=self.gres,
-            command=self.lmp_command,
+            partition=None,
+            nodes=1,
+            ntasks_per_node=32,
+            wall_time='24:00:00',
+            gres=None,
+            command='lmp -in run.in > log.run',
+            source_list=[],
+            custom_flags=[],
+            envs={},
         )
 
-        if self.machine_template and os.path.exists(self.machine_template):
-            with open(self.machine_template) as f:
-                machine = json.load(f)
+        # ---- Phase 2: machine_template fills in higher-priority defaults ----
+        if self.machine_template:
+            tmpl = parse_machine_json(
+                self.machine_template, section='model_devi')
+            for k, v in tmpl.items():
+                if k == 'command':          # env activation goes via source_list
+                    continue                # lmp_command comes from fallback or user
+                if v:                       # non-empty values override phase-1
+                    cfg[k] = v
 
-            for key in ['model_devi', 'fp']:
-                raw = machine.get(key)
-                if not raw:
-                    continue
-                if isinstance(raw, list):
-                    raw = raw[0] if raw else {}
-                if not raw:
-                    continue
-
-                res = raw.get('resources', {})
-                bat = raw.get('machine', {}).get('batch', {})
-                combo = {**res, **bat}  # resources overridden by batch
-
-                if not cfg['partition']:
-                    cfg['partition'] = (res.get('queue_name')
-                                        or bat.get('slurm_partition'))
-                if cfg['nodes'] == 1:
-                    cfg['nodes'] = (res.get('number_node', 1)
-                                    or bat.get('slurm_nodes', 1))
-                if cfg['ntasks_per_node'] == 32:
-                    cfg['ntasks_per_node'] = (res.get('cpu_per_node', 32)
-                                              or bat.get('slurm_ntasks_per_node', 32))
-                if cfg['wall_time'] == '24:00:00':
-                    cfg['wall_time'] = bat.get('slurm_time', '24:00:00')
-                if not cfg['gres']:
-                    cfg['gres'] = bat.get('slurm_gres', '')
-                if cfg['command'] == 'lmp -in run.in > log.run':
-                    cfg['command'] = raw.get('command', 'lmp -in run.in > log.run')
-                break
+        # ---- Phase 3: constructor explicit values (non-None) override ----
+        overrides = [
+            ('partition', 'partition'),
+            ('nodes', 'nodes'),
+            ('ntasks_per_node', 'ntasks_per_node'),
+            ('wall_time', 'wall_time'),
+            ('gres', 'gres'),
+            ('lmp_command', 'command'),
+        ]
+        for attr, key in overrides:
+            val = getattr(self, attr)
+            if val is not None:
+                cfg[key] = val
 
         return cfg
 
@@ -292,16 +288,27 @@ class EOSCalculator:
         """Write job.sbatch in *work_dir*."""
         lines = ['#!/bin/bash']
         lines.append(f'#SBATCH -J {job_name}')
-        if cfg['partition']:
+        if cfg.get('partition'):
             lines.append(f'#SBATCH -p {cfg["partition"]}')
         lines.append(f'#SBATCH -N {cfg["nodes"]}')
         lines.append(f'#SBATCH --ntasks-per-node={cfg["ntasks_per_node"]}')
-        if cfg['wall_time']:
+        if cfg.get('wall_time'):
             lines.append(f'#SBATCH -t {cfg["wall_time"]}')
-        if cfg['gres']:
+        if cfg.get('gres'):
             lines.append(f'#SBATCH --gres={cfg["gres"]}')
+        for flag in cfg.get('custom_flags', []):
+            flag = flag.strip()
+            if flag.startswith('#SBATCH') and '--job-name' not in flag:
+                lines.append(flag)
         lines.append('')
         lines.append(f'cd {work_dir}')
+
+        # environment setup from machine_template
+        for src in cfg.get('source_list', []):
+            lines.append(src)
+        for k, v in cfg.get('envs', {}).items():
+            lines.append(f'export {k}={v}')
+
         lines.append('')
         lines.append(cfg['command'])
 

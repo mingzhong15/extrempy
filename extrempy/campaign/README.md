@@ -207,15 +207,17 @@ results = run_eos_all(['Al', 'Cu', 'Au'],
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
-| `machine_template` | None | dpgen `machine.json` 路径，用作默认资源配置 |
-| `partition` | None | Slurm 分区 |
-| `nodes` | 1 | 节点数 |
-| `ntasks_per_node` | 32 | 每节点任务数 |
-| `wall_time` | '24:00:00' | 最长运行时间 |
-| `gres` | None | GPU 资源 (e.g. `'gpu:1'`) |
-| `lmp_command` | `'lmp -in run.in > log.run'` | LAMMPS 运行命令 |
+| `machine_template` | None | dpgen `machine.json` 路径，**最高优先来源** |
+| `partition` | None | Slurm 分区（覆盖 machine_template） |
+| `nodes` | None | 节点数（覆盖 machine_template） |
+| `ntasks_per_node` | None | 每节点任务数（覆盖 machine_template） |
+| `wall_time` | None | 最长运行时间（覆盖 machine_template） |
+| `gres` | None | GPU 资源 (e.g. `'gpu:1'`)（覆盖 machine_template） |
+| `lmp_command` | None | LAMMPS 运行命令（覆盖 machine_template） |
 
-优先级：构造函数参数 > `machine_template(model_devi/fp)` 段
+优先级：**machine_template** → 构造函数非 `None` 参数 → 内部默认值
+
+示例：`machine_template` 的 `model_devi` 指定 `cpu_per_node=40`、`queue_name=nudt40c`、`source_list=[...activate]`，则生成的 sbatch 自动用这些值，除非构造函数显式覆盖。
 
 ### 温度与计算
 
