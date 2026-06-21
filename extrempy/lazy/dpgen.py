@@ -238,7 +238,7 @@ class DPGENGenerator(InputGenerator):
                 if real_idx < len(init_steps):
                     nsteps = init_steps[real_idx]
                 else:
-                    nsteps = init_steps[-1] * pow(2, iter_idx - len(init_steps)+1)
+                    nsteps = int(init_steps[-1] * pow(2, iter_idx - len(init_steps) + 1))
 
                 # 创建新的字典
 
@@ -313,8 +313,8 @@ class DPGENGenerator(InputGenerator):
                     if real_idx < len(init_steps):
                         nsteps = init_steps[real_idx]
                     else:
-                        nsteps = init_steps[-1] * pow(
-                            2, iter_idx - len(init_steps) + 1)
+                        nsteps = int(init_steps[-1] * pow(
+                            2, iter_idx - len(init_steps) + 1))
                 else:
                     nsteps = init_steps
                 new_job = {
