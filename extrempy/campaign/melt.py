@@ -2,6 +2,7 @@ import os
 import glob
 import subprocess
 import numpy as np
+import ase.io
 
 from extrempy.lazy.lammps import LAMMPSGenerator
 from extrempy.lazy.lib import _get_mass_map, ELEMENT_PHASE_DATA
@@ -190,6 +191,15 @@ class EOSCalculator:
             f'No POSCAR found for {self.element}. '
             'Set poscar_path, poscar_dir, or dpgen_dir.')
 
+    def _get_natoms(self, poscar_path, nx, ny, nz):
+        atoms = ase.io.read(poscar_path, format='vasp')
+        natoms_uc = len(atoms)
+        natoms_total = natoms_uc * nx * ny * nz
+        print(f'[{self.element}] 原胞原子数: {natoms_uc}')
+        print(f'[{self.element}] 扩胞: {nx} x {ny} x {nz}')
+        print(f'[{self.element}] 总原子数: {natoms_total}')
+        return natoms_total
+
     def _get_two_phase_temps(self):
         """Return candidate temperatures for two-phase runs."""
         Tm = self._get_tm()
@@ -329,20 +339,25 @@ class EOSCalculator:
 
     # ---- Phase 1: two-phase melt determination ------------------------------
 
-    def generate_two_phase(self):
+    def generate_two_phase(self, nx=None, ny=None, nz=None):
         """Generate two-phase LAMMPS inputs at candidate temperatures."""
         Tm = self._get_tm()
         temps = self._get_two_phase_temps()
         poscar = self._find_poscar()
         pot = self._find_pot()
 
+        _nx = nx if nx is not None else self.supercell[0]
+        _ny = ny if ny is not None else self.supercell[1]
+        _nz = nz if nz is not None else self.two_phase_nz
+        self._get_natoms(poscar, _nx, _ny, _nz)
+
         base = self._base_params()
         base.update(
             Q_cutoff=self.Q_cutoff,
             heating_step=self.heat_steps,
             equilibrate_step=self.equil_steps,
-            nx=self.supercell[0], ny=self.supercell[1],
-            nz=self.two_phase_nz)
+            nx=_nx, ny=_ny,
+            nz=_nz)
 
         self._two_phase_gens = []
         for T_est in temps:
@@ -399,18 +414,23 @@ class EOSCalculator:
 
     # ---- Phase 2: NPT property scan ----------------------------------------
 
-    def generate_npt(self, phases=('solid', 'liquid')):
+    def generate_npt(self, phases=('solid', 'liquid'), nx=None, ny=None, nz=None):
         """Generate NPT LAMMPS inputs at multiple temperatures."""
         temps = self._get_npt_temps()
         poscar = self._find_poscar(
             -1 if 'liquid' in phases and len(phases) > 1 else 0)
         pot = self._find_pot()
 
+        _nx = nx if nx is not None else self.supercell[0]
+        _ny = ny if ny is not None else self.supercell[1]
+        _nz = nz if nz is not None else self.supercell[2]
+        self._get_natoms(poscar, _nx, _ny, _nz)
+
         base = self._base_params()
         base.update(
             equilibrate_step=self.equil_steps,
-            nx=self.supercell[0], ny=self.supercell[1],
-            nz=self.supercell[2])
+            nx=_nx, ny=_ny,
+            nz=_nz)
 
         self._npt_gens = []
         for phase in phases:
@@ -449,19 +469,24 @@ class EOSCalculator:
 
     # ---- Phase 3: NVT trajectory ------------------------------------------
 
-    def generate_nvt_traj(self, phases=('solid', 'liquid')):
+    def generate_nvt_traj(self, phases=('solid', 'liquid'), nx=None, ny=None, nz=None):
         """Generate NVT trajectory LAMMPS inputs."""
         Tm = int(self._get_tm())
         poscar = self._find_poscar(
             -1 if 'liquid' in phases and len(phases) > 1 else 0)
         pot = self._find_pot()
 
+        _nx = nx if nx is not None else self.supercell[0]
+        _ny = ny if ny is not None else self.supercell[1]
+        _nz = nz if nz is not None else self.supercell[2]
+        self._get_natoms(poscar, _nx, _ny, _nz)
+
         base = self._base_params()
         base.update(
             equilibrate_step=self.equil_steps,
             dump_freq=self.dump_freq,
-            nx=self.supercell[0], ny=self.supercell[1],
-            nz=self.supercell[2])
+            nx=_nx, ny=_ny,
+            nz=_nz)
 
         self._traj_gens = []
         for phase in phases:
