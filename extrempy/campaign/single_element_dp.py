@@ -422,15 +422,21 @@ class DPBuilder:
             last_sys = None
 
             for dd in data_dirs:
-                sys = dpdata.LabeledSystem(dd, fmt='deepmd/raw')
-                ms.append(sys)
-                last_sys = sys
-                fp = os.path.join(dd, 'fparam.raw')
-                if os.path.exists(fp):
-                    fparam_vals.extend(np.loadtxt(fp).ravel().tolist())
-                ip = os.path.join(dd, 'internal.raw')
-                if os.path.exists(ip):
-                    internal_vals.extend(np.loadtxt(ip).ravel().tolist())
+                subdirs = sorted([
+                    os.path.join(dd, d) for d in os.listdir(dd)
+                    if os.path.isdir(os.path.join(dd, d))
+                ])
+                sys_dirs = subdirs if subdirs else [dd]
+                for sys_path in sys_dirs:
+                    sys = dpdata.LabeledSystem(sys_path, fmt='deepmd/raw')
+                    ms.append(sys)
+                    last_sys = sys
+                    fp = os.path.join(sys_path, 'fparam.raw')
+                    if os.path.exists(fp):
+                        fparam_vals.extend(np.loadtxt(fp).ravel().tolist())
+                    ip = os.path.join(sys_path, 'internal.raw')
+                    if os.path.exists(ip):
+                        internal_vals.extend(np.loadtxt(ip).ravel().tolist())
 
             out_sub = os.path.join(collected_dir, label)
             ms.to_deepmd_raw(out_sub)
