@@ -236,7 +236,7 @@ class DPGENGenerator(InputGenerator):
             for iter_idx in range(numb_iters):
 
                 if real_idx < len(init_steps):
-                    nsteps = init_steps[real_idx]
+                    nsteps = int(init_steps[real_idx])
                 else:
                     nsteps = int(init_steps[-1] * pow(2, iter_idx - len(init_steps) + 1))
 
@@ -311,12 +311,12 @@ class DPGENGenerator(InputGenerator):
             for iter_idx in range(nsteps_per_phase):
                 if isinstance(init_steps, (list, tuple)):
                     if real_idx < len(init_steps):
-                        nsteps = init_steps[real_idx]
+                        nsteps = int(init_steps[real_idx])
                     else:
                         nsteps = int(init_steps[-1] * pow(
                             2, iter_idx - len(init_steps) + 1))
                 else:
-                    nsteps = init_steps
+                    nsteps = int(init_steps)
                 new_job = {
                     "sys_idx": [sys_idx],
                     "temps": T_list,
