@@ -5,7 +5,8 @@ from .lazy.vasp import VASPGenerator, VASPReader, _incar_dict, _render_incar
 from .lazy.dpgen import DPGENGenerator
 from .lazy.init_data import (bootstrap_init_data,
                              generate_liquid_poscar_from_contcar,
-                             scale_poscar_volume)
+                             scale_poscar_volume,
+                             raw_to_set)
 from .campaign.single_element_dp import (DPBuilder,
                                           ElementDPBuilder,
                                           build_all_elements)

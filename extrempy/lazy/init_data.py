@@ -5,7 +5,7 @@ import numpy as np
 import dpdata
 
 
-def _raw_to_set(out_dir, nline_per_set=100000):
+def raw_to_set(out_dir, nline_per_set=100000):
     raw_names = ['box.raw', 'coord.raw', 'energy.raw', 'force.raw',
                  'virial.raw', 'atom_ener.raw', 'fparam.raw', 'aparam.raw']
     for raw_name in raw_names:
@@ -93,7 +93,7 @@ def bootstrap_init_data(aimd_dirs, sample_root,
         sub.to_deepmd_raw(out_dir)
         fpar = np.ones(n_selected).reshape(-1, 1) * fparam_K
         np.savetxt(os.path.join(out_dir, 'fparam.raw'), fpar)
-        _raw_to_set(out_dir)
+        raw_to_set(out_dir)
         init_data_sys.append(label)
         phase = 'LIQ' if is_liquid else 'SOL'
         print(f"  {label}: T_ref={fparam_K:.0f}K, "

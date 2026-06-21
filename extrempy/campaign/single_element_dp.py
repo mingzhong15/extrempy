@@ -326,6 +326,154 @@ class DPBuilder:
         g.submit()
         print(f"  DPGEN submitted: {job_name}")
 
+    def collect_dpgen(self, collected_dir=None, set_numb=20000):
+        """Harvest DPGEN results after completion.
+
+        1. Symlink the final frozen model to ``{dpgen_dir}/frozen_model.pb``.
+        2. Collect all FP-labeled structures from all iterations into
+           *collected_dir* (deepmd/npy format, ready for ``extra_init_root``).
+
+        Parameters
+        ----------
+        collected_dir : str, optional
+            Output path.  Default: ``{dpgen_dir}/collected/``.
+        set_numb : int
+            Max frames per ``set.*`` subdirectory.
+
+        Returns
+        -------
+        dict
+            ``{'model_path': ..., 'collected_dir': ...,
+               'n_iters': ..., 'n_systems': ..., 'n_frames_total': ...}``
+        """
+        import dpdata
+        import numpy as np
+        from extrempy.lazy.init_data import raw_to_set
+
+        if collected_dir is None:
+            collected_dir = os.path.join(self.dpgen_dir, 'collected')
+
+        iter_dirs = sorted(glob.glob(os.path.join(self.dpgen_dir, 'iter.*')))
+        if not iter_dirs:
+            raise FileNotFoundError(
+                f"No iter.* directories in {self.dpgen_dir}; "
+                f"DPGEN may not have started yet.")
+
+        print(f"-- Collect DPGEN ({len(iter_dirs)} iterations) --")
+
+        # 1. Final frozen model (last iteration, model 000)
+        model_path = None
+        for name in ['frozen_model_compressed.pb', 'frozen_model.pb']:
+            files = sorted(glob.glob(
+                os.path.join(self.dpgen_dir, 'iter.*', '00.train', '000', name)))
+            if files:
+                model_path = files[-1]
+                break
+
+        if model_path:
+            dst = os.path.join(self.dpgen_dir, 'frozen_model.pb')
+            if os.path.lexists(dst):
+                os.remove(dst)
+            os.symlink(model_path, dst)
+            print(f"  model: {dst}")
+
+        # 2. Read sys labels from param.json
+        param_path = os.path.join(self.dpgen_dir, 'param.json')
+        labels = []
+        if os.path.exists(param_path):
+            with open(param_path) as f:
+                jdata = json.load(f)
+            labels = [
+                os.path.basename(c[0]).rsplit('.', 1)[0]
+                for c in jdata.get('sys_configs', [])
+            ]
+
+        # 3. Discover system indices from 02.fp/ directories
+        sys_indices = set()
+        for d in glob.glob(os.path.join(
+                self.dpgen_dir, 'iter.*', '02.fp', 'data.*')):
+            sys_indices.add(int(os.path.basename(d).split('.')[1]))
+
+        if not sys_indices:
+            print("  (no FP data found in any iteration)")
+            return {
+                'model_path': model_path,
+                'collected_dir': collected_dir,
+                'n_iters': len(iter_dirs),
+                'n_systems': 0,
+                'n_frames_total': 0,
+            }
+
+        os.makedirs(collected_dir, exist_ok=True)
+        collected_paths = {}
+        n_frames_total = 0
+
+        for sys_idx in sorted(sys_indices):
+            label = labels[sys_idx] if sys_idx < len(labels) else f'sys.{sys_idx}'
+            data_dirs = sorted(glob.glob(
+                os.path.join(self.dpgen_dir, 'iter.*', '02.fp',
+                             f'data.{sys_idx:03d}')))
+            if not data_dirs:
+                continue
+
+            ms = dpdata.MultiSystems()
+            fparam_vals = []
+            internal_vals = []
+            last_sys = None
+
+            for dd in data_dirs:
+                sys = dpdata.LabeledSystem(dd, fmt='deepmd/raw')
+                ms.append(sys)
+                last_sys = sys
+                fp = os.path.join(dd, 'fparam.raw')
+                if os.path.exists(fp):
+                    fparam_vals.extend(np.loadtxt(fp).ravel().tolist())
+                ip = os.path.join(dd, 'internal.raw')
+                if os.path.exists(ip):
+                    internal_vals.extend(np.loadtxt(ip).ravel().tolist())
+
+            out_sub = os.path.join(collected_dir, label)
+            ms.to_deepmd_raw(out_sub)
+
+            # Flatten: MultiSystems writes to {out_sub}/{formula}/ - move raws up
+            for item in os.listdir(out_sub):
+                item_path = os.path.join(out_sub, item)
+                if os.path.isdir(item_path):
+                    for f in os.listdir(item_path):
+                        shutil.move(os.path.join(item_path, f), out_sub)
+                    os.rmdir(item_path)
+
+            nf = sum(len(sub) for sub in ms.systems.values())
+            print(f"  {label}: {nf} frames", end='')
+
+            if fparam_vals and last_sys is not None:
+                natom = last_sys.get_natoms()
+                fparr = np.array(fparam_vals)
+                aparam = fparr.reshape(-1, 1).repeat(natom, axis=1)
+                np.savetxt(os.path.join(out_sub, 'fparam.raw'), fparr)
+                np.savetxt(os.path.join(out_sub, 'aparam.raw'), aparam)
+                print(' (fparam)', end='')
+
+            if internal_vals:
+                np.savetxt(os.path.join(out_sub, 'internal.raw'),
+                           np.array(internal_vals))
+                print(' (internal)', end='')
+
+            raw_to_set(out_sub, set_numb)
+            collected_paths[label] = out_sub
+            n_frames_total += nf
+            print()
+
+        print(f"  total: {n_frames_total} frames, "
+              f"{len(collected_paths)} systems")
+        return {
+            'model_path': model_path,
+            'collected_dir': collected_dir,
+            'n_iters': len(iter_dirs),
+            'n_systems': len(collected_paths),
+            'n_frames_total': n_frames_total,
+        }
+
     def inspect(self):
         from extrempy.dpsample import SampleSys
         return SampleSys(self.dpgen_dir, printf=True)
