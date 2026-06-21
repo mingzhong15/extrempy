@@ -348,8 +348,9 @@ class ElementDPBuilder(DPBuilder):
         return data.get('Tm', 1000)
 
     def get_phase_segments(self):
-        segs = get_phase_segments(self.element)
         Tm = self._get_tm()
+        T_min = 200 if Tm <= 500 else 300
+        segs = get_phase_segments(self.element, T_range=(T_min, None))
         print(f"-- Phase Segments --  {self.element} (Tm={Tm}K, {len(segs)} phases)")
         for i, s in enumerate(segs):
             tc = s['T_core']
