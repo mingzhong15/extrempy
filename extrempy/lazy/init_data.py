@@ -1,6 +1,5 @@
 import os
 import shutil
-import glob
 
 import numpy as np
 import dpdata
@@ -22,6 +21,17 @@ def _raw_to_set(out_dir, nline_per_set=100000):
             base = raw_name.replace('.raw', '')
             np.save(os.path.join(set_dir, base), chunk.astype(np.float32))
         os.remove(raw_path)
+
+
+def _is_valid_data_dir(path):
+    if not os.path.isdir(path):
+        return False
+    if not os.path.isfile(os.path.join(path, 'type.raw')):
+        return False
+    for entry in os.listdir(path):
+        if entry.startswith('set.') and os.path.isdir(os.path.join(path, entry)):
+            return True
+    return False
 
 
 def bootstrap_init_data(aimd_dirs, sample_root,
@@ -70,18 +80,20 @@ def bootstrap_init_data(aimd_dirs, sample_root,
                             except ValueError:
                                 pass
                         break
+        out_dir = os.path.join(sample_root, label)
+        if _is_valid_data_dir(out_dir):
+            print(f"  SKIP {label}: data already exists in {out_dir}")
+            init_data_sys.append(label)
+            continue
         stride = liq_stride if is_liquid else solid_stride
         indices = list(range(drop_first, nframe, stride))
         sub = ss[indices]
         n_selected = len(indices)
-        out_dir = os.path.join(sample_root, label)
         os.makedirs(out_dir, exist_ok=True)
         sub.to_deepmd_raw(out_dir)
         fpar = np.ones(n_selected).reshape(-1, 1) * fparam_K
         np.savetxt(os.path.join(out_dir, 'fparam.raw'), fpar)
-        raw_list = glob.glob(os.path.join(out_dir, '*', '*.raw'))
-        if raw_list:
-            _raw_to_set(out_dir)
+        _raw_to_set(out_dir)
         init_data_sys.append(label)
         phase = 'LIQ' if is_liquid else 'SOL'
         print(f"  {label}: T_ref={fparam_K:.0f}K, "
