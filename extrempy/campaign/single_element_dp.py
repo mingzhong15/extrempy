@@ -318,9 +318,15 @@ class DPBuilder:
 
     def submit_dpgen(self):
         if self.platform == 'slurm':
-            print(f"  DPGEN configurations ready: {self.dpgen_dir}")
-            print(f"  machine.json has been generated; run via dpdispatcher:")
-            print(f"    cd {self.dpgen_dir} && dpgen run param.json")
+            import subprocess, os
+            log_path = os.path.join(self.dpgen_dir, 'dpgen.log')
+            with open(log_path, 'w') as flog:
+                proc = subprocess.Popen(
+                    ['dpgen', 'run', 'param.json', 'machine.json'],
+                    cwd=self.dpgen_dir,
+                    stdout=flog, stderr=subprocess.STDOUT,
+                )
+            print(f"  DPGEN submitted: {self.dpgen_dir}/dpgen.log (PID {proc.pid})")
             return
         job_name = (self.element or 'system') + '_dpgen'
         g = self._dpgen_gen
