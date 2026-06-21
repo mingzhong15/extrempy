@@ -132,15 +132,13 @@ class TestBootstrapInitDataSmoke(unittest.TestCase):
                     f.write('TEBEG = 800\n')
                 result = bootstrap_init_data(
                     [('Ti-HCP', incar_dir)],
-                    os.path.join(tmp, 'init_data'), 'raw_to_set.sh',
+                    os.path.join(tmp, 'init_data'),
                     drop_first=200)
 
-    def test_temperature_from_incar(self):
+    def test_liquid_uses_liq_stride(self):
         from unittest.mock import patch, MagicMock
         with patch('extrempy.lazy.init_data.dpdata.LabeledSystem') as mock_ls, \
-             patch('extrempy.lazy.init_data.np.savetxt'), \
-             patch('extrempy.lazy.init_data.subprocess.run',
-                   return_value=MagicMock(returncode=0)):
+             patch('extrempy.lazy.init_data.np.savetxt'):
             mock_sys = MagicMock()
             mock_sys.get_nframes.return_value = 500
             mock_sys.__getitem__.return_value = mock_sys
@@ -149,7 +147,6 @@ class TestBootstrapInitDataSmoke(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 aimd_dir = os.path.join(tmp, 'Ti-LIQ')
                 os.makedirs(aimd_dir, exist_ok=True)
-                # Must create OUTCAR file (bootstrap checks os.path.exists)
                 with open(os.path.join(aimd_dir, 'OUTCAR'), 'w') as f:
                     f.write("dummy outcar content")
                 with open(os.path.join(aimd_dir, 'INCAR'), 'w') as f:
@@ -158,9 +155,7 @@ class TestBootstrapInitDataSmoke(unittest.TestCase):
                 init_sys = os.path.join(tmp, 'init_data')
                 result = bootstrap_init_data(
                     [('Ti-LIQ', aimd_dir)], init_sys,
-                    'raw_to_set.sh',
-                    drop_first=200, low_T_stride=50,
-                    high_T_stride=30, high_T_threshold=1500)
+                    drop_first=200, solid_stride=50, liq_stride=30)
                 self.assertIn('Ti-LIQ', result)
 
 

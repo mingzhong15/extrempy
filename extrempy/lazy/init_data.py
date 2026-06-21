@@ -25,25 +25,29 @@ def _raw_to_set(out_dir, nline_per_set=100000):
 
 
 def bootstrap_init_data(aimd_dirs, sample_root,
-                        drop_first=200, low_T_stride=50, high_T_stride=30,
-                        high_T_threshold=1500):
+                        drop_first=200, solid_stride=50, liq_stride=30):
     """Read VASP AIMD OUTCAR, extract frames, write deepmd/npy + fparam.raw.
 
     Parameters
     ----------
-    aimd_dirs : list[(label, aimd_dir)]
+    aimd_dirs : list[(label, aimd_dir)] or list[(label, aimd_dir, is_liquid)]
+                if 2-tuple, liquid detection by label.endswith('-LIQ')
     sample_root : str  (init_data root)
     drop_first : int  steps to discard at start
-    low_T_stride : int  frame stride for T < high_T_threshold
-    high_T_stride : int  frame stride for T >= high_T_threshold
-    high_T_threshold : float  K
+    solid_stride : int  frame stride for solid phases
+    liq_stride : int  frame stride for liquid phases
 
     Returns
     -------
     init_data_sys : list[str]  relative paths of generated sets
     """
     init_data_sys = []
-    for label, aimd_dir in aimd_dirs:
+    for item in aimd_dirs:
+        if len(item) == 3:
+            label, aimd_dir, is_liquid = item
+        else:
+            label, aimd_dir = item
+            is_liquid = label.upper().endswith('-LIQ')
         outcar = os.path.join(aimd_dir, 'OUTCAR')
         incar = os.path.join(aimd_dir, 'INCAR')
         if not os.path.exists(outcar):
@@ -66,7 +70,7 @@ def bootstrap_init_data(aimd_dirs, sample_root,
                             except ValueError:
                                 pass
                         break
-        stride = high_T_stride if fparam_K >= high_T_threshold else low_T_stride
+        stride = liq_stride if is_liquid else solid_stride
         indices = list(range(drop_first, nframe, stride))
         sub = ss[indices]
         n_selected = len(indices)
@@ -79,8 +83,9 @@ def bootstrap_init_data(aimd_dirs, sample_root,
         if raw_list:
             _raw_to_set(out_dir)
         init_data_sys.append(label)
+        phase = 'LIQ' if is_liquid else 'SOL'
         print(f"  {label}: T_ref={fparam_K:.0f}K, "
-              f"{n_selected}/{nframe} frames, stride={stride}")
+              f"{n_selected}/{nframe} frames, {phase} stride={stride}")
     return init_data_sys
 
 

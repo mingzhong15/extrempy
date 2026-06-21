@@ -29,11 +29,9 @@ class DPBuilder:
                  nsteps_per_phase=5,
                  init_steps=None,
                  f_trust=None, model_devi_skip=0,
-                 training_reuse_iter=99, numb_frame_per_iter_per_PT=5,
-                 trj_freq=20, aimd_steps=500, aimd_dt=1,
-                 liquid_T_factor=1.8, liquid_V_scale=1.10,
-                 drop_first_aimd=200, low_T_stride=50, high_T_stride=30,
-                 high_T_threshold=1500):
+                  training_reuse_iter=99, numb_frame_per_iter_per_PT=5,
+                  trj_freq=20, aimd_steps=500, aimd_dt=1,
+                  liquid_T_factor=1.8, liquid_V_scale=1.10):
         self.work_root = work_root
         self.potcar_lib = potcar_lib
         self.potcar_set = potcar_set
@@ -54,10 +52,6 @@ class DPBuilder:
         self.aimd_dt = aimd_dt
         self.liquid_T_factor = liquid_T_factor
         self.liquid_V_scale = liquid_V_scale
-        self.drop_first_aimd = drop_first_aimd
-        self.low_T_stride = low_T_stride
-        self.high_T_stride = high_T_stride
-        self.high_T_threshold = high_T_threshold
         self.platform = platform
         self.potcar_map = PotcarMap(potcar_set, potcar_lib)
         self.jparam = None
@@ -189,14 +183,15 @@ class DPBuilder:
                 print(f"  [{i}] {jl}: unknown platform '{self.platform}', skip")
 
     # ---- collect init data ----
-    def collect_init_data(self, segs):
-        _dirs = [(l, w) for l, w, _ in self._aimd_dirs]
+    def collect_init_data(self, segs, drop_first=200,
+                          solid_stride=50, liq_stride=30):
+        _dirs = [(l, w, orig.endswith('-LIQ'))
+                 for l, w, orig in self._aimd_dirs]
         results = bootstrap_init_data(
             _dirs, self.init_data_dir,
-            drop_first=self.drop_first_aimd,
-            low_T_stride=self.low_T_stride,
-            high_T_stride=self.high_T_stride,
-            high_T_threshold=self.high_T_threshold)
+            drop_first=drop_first,
+            solid_stride=solid_stride,
+            liq_stride=liq_stride)
         for _, wd, orig in self._aimd_dirs:
             generate_liquid_poscar_from_contcar((orig, wd), self.confs_dir)
         self._init_data_sys = results
