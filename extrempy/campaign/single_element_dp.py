@@ -211,7 +211,8 @@ class DPBuilder:
     # ---- DPGEN ----
     def generate_dpgen(self, segs, elements=None,
                        extra_init_sys=None, extra_init_root=None,
-                       phase_ids=None, phase_labels=None):
+                       phase_ids=None, phase_labels=None,
+                       extra_params=None):
         if elements is None:
             elements = self.elements
 
@@ -287,6 +288,8 @@ class DPBuilder:
         g.jparam["fp_pp_files"] = ['POTCAR']
         g.jparam["fp_incar"] = os.path.join(self.dpgen_dir, 'INCAR')
         g._optimize_prefix()
+        if extra_params:
+            g.jparam.update(extra_params)
         param_path = os.path.join(self.dpgen_dir, 'param.json')
         with open(param_path, 'w') as f:
             json.dump(g.jparam, f, indent=4)
