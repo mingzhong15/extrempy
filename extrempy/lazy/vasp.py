@@ -300,6 +300,8 @@ class VASPReader:
                     U = float(line.split()[-4])
                 except StopIteration:
                     break
+                except ValueError:
+                    continue
                 if sigma is not None:
                     ele_temp_K = sigma / kb_eV
                 else:
