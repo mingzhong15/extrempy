@@ -63,6 +63,15 @@ class EOSCalculator:
     template_dir : str or None
         Jinja2 template directory.  Defaults to the built-in templates
         shipped with the package (``extrempy/campaign/templates/``).
+    two_phase_temps : list of int or None
+        Explicit list of two-phase candidate temperatures (K).
+        When set, ``two_phase_delta`` and ``two_phase_count`` are ignored.
+    two_phase_delta : int
+        Temperature step (K) for evenly-spaced candidates centred at Tm.
+        Only used when ``two_phase_temps`` is ``None``.  Default is 100.
+    two_phase_count : int
+        Number of candidate temperatures (must be odd).  Default is 3
+        → ``[Tm - delta, Tm, Tm + delta]``.  Set to 5 for five points, etc.
     """
 
     def __init__(self, work_root,
@@ -85,7 +94,8 @@ class EOSCalculator:
                  template_dir=None,
 
                  # temperature / simulation
-                 two_phase_frac=0.10, two_phase_shift=300,
+                 two_phase_temps=None, two_phase_delta=100,
+                 two_phase_count=3,
                  two_phase_nz=10,
                  npt_n=5, npt_dT=100, npt_shift=-600,
                  supercell=(5, 5, 5),
@@ -114,8 +124,9 @@ class EOSCalculator:
         self.template_dir = template_dir if template_dir else _TEMPLATE_DIR
 
         # temperature / simulation
-        self.two_phase_frac = two_phase_frac
-        self.two_phase_shift = two_phase_shift
+        self.two_phase_temps = two_phase_temps
+        self.two_phase_delta = two_phase_delta
+        self.two_phase_count = two_phase_count
         self.two_phase_nz = two_phase_nz
         self.npt_n = npt_n
         self.npt_dT = npt_dT
@@ -201,11 +212,20 @@ class EOSCalculator:
         return natoms_total
 
     def _get_two_phase_temps(self):
-        """Return candidate temperatures for two-phase runs."""
+        """Return candidate temperatures for two-phase runs.
+
+        Priority:
+          1. ``self.two_phase_temps`` (explicit list) — return as-is.
+          2. ``self.two_phase_delta`` + ``self.two_phase_count`` — generate
+             evenly-spaced temperatures centred at Tm.
+          3. Default: two_phase_delta=100, two_phase_count=3.
+        """
+        if self.two_phase_temps is not None:
+            return self.two_phase_temps
         Tm = self._get_tm()
-        dT = (int(Tm * self.two_phase_frac / self.npt_dT) + 1) * self.npt_dT
-        return [int(Tm + off + self.two_phase_shift)
-                for off in [-dT, 0, dT]]
+        half = self.two_phase_count // 2
+        offsets = [i * self.two_phase_delta for i in range(-half, half + 1)]
+        return [int(Tm + off) for off in offsets]
 
     def _get_npt_temps(self):
         """Return NPT temperature series."""
@@ -320,7 +340,11 @@ class EOSCalculator:
             lines.append(f'export {k}={v}')
 
         lines.append('')
-        lines.append(cfg['command'])
+        cmd = cfg['command']
+        total_ranks = cfg['nodes'] * cfg['ntasks_per_node']
+        if total_ranks > 1 and not any(x in cmd for x in ['mpirun', 'srun', 'mpiexec']):
+            cmd = f'mpirun -np $SLURM_NTASKS {cmd}'
+        lines.append(cmd)
 
         path = os.path.join(work_dir, 'job.sbatch')
         with open(path, 'w') as f:
