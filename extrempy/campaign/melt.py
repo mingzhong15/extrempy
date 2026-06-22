@@ -168,9 +168,9 @@ class EOSCalculator:
         atoms = ase.io.read(poscar_path, format='vasp')
         natoms_uc = len(atoms)
         natoms_total = natoms_uc * nx * ny * nz
-        print(f'[{self.element}] 原胞原子数: {natoms_uc}')
-        print(f'[{self.element}] 扩胞: {nx} x {ny} x {nz}')
-        print(f'[{self.element}] 总原子数: {natoms_total}')
+        print(f'[{self.element}] Unit cell atoms : {natoms_uc}')
+        print(f'[{self.element}] Supercell       : {nx} x {ny} x {nz}')
+        print(f'[{self.element}] Total atoms     : {natoms_total}')
         return natoms_total
 
     def _get_npt_temps(self, npt_n=5, npt_dT=100, npt_shift=-600):
@@ -326,6 +326,9 @@ class EOSCalculator:
             offsets = [i * two_phase_delta for i in range(-half, half + 1)]
             temps = [int(Tm + off) for off in offsets]
 
+        print(f'[{self.element}] Melting point (Tm) : {Tm} K')
+        print(f'[{self.element}] Two-phase temps   : {temps}')
+
         poscar = self._find_poscar()
         pot = self._find_pot()
 
@@ -402,6 +405,7 @@ class EOSCalculator:
                      equil_steps=100000, dt=0.001, pressure=0.0001):
         """Generate NPT LAMMPS inputs at multiple temperatures."""
         temps = self._get_npt_temps(npt_n, npt_dT, npt_shift)
+        print(f'[{self.element}] NPT temperature series : {temps}')
         poscar = self._find_poscar(
             -1 if 'liquid' in phases and len(phases) > 1 else 0)
         pot = self._find_pot()
@@ -459,6 +463,7 @@ class EOSCalculator:
                           dt=0.001, pressure=0.0001):
         """Generate NVT trajectory LAMMPS inputs."""
         Tm = int(self._get_tm())
+        print(f'[{self.element}] NVT temperature         : {Tm} K')
         poscar = self._find_poscar(
             -1 if 'liquid' in phases and len(phases) > 1 else 0)
         pot = self._find_pot()
