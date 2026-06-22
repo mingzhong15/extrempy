@@ -14,11 +14,9 @@ _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 class EOSCalculator:
     """LAMMPS-based Equation-of-State and melt determination pipeline.
 
-    Mirrors DPBuilder design pattern:
-      * Constructor captures ALL configuration.
-      * Generate / submit / analyze are separate step methods.
-      * Hook methods (_get_tm, _find_pot, …) let subclasses customize.
-      * Element-level subclass (ElementEOSCalculator) for single-element jobs.
+    The constructor captures only infrastructure configuration (paths, Slurm
+    resources, template directory).  All simulation parameters are passed
+    directly to the ``generate_*`` step methods.
 
     Directory layout per element::
 
@@ -63,15 +61,6 @@ class EOSCalculator:
     template_dir : str or None
         Jinja2 template directory.  Defaults to the built-in templates
         shipped with the package (``extrempy/campaign/templates/``).
-    two_phase_temps : list of int or None
-        Explicit list of two-phase candidate temperatures (K).
-        When set, ``two_phase_delta`` and ``two_phase_count`` are ignored.
-    two_phase_delta : int
-        Temperature step (K) for evenly-spaced candidates centred at Tm.
-        Only used when ``two_phase_temps`` is ``None``.  Default is 100.
-    two_phase_count : int
-        Number of candidate temperatures (must be odd).  Default is 3
-        → ``[Tm - delta, Tm, Tm + delta]``.  Set to 5 for five points, etc.
     """
 
     def __init__(self, work_root,
@@ -91,17 +80,7 @@ class EOSCalculator:
                  lmp_command=None,
 
                  # templates (built-in by default)
-                 template_dir=None,
-
-                 # temperature / simulation
-                 two_phase_temps=None, two_phase_delta=100,
-                 two_phase_count=3,
-                 two_phase_nz=10,
-                 npt_n=5, npt_dT=100, npt_shift=-600,
-                 supercell=(5, 5, 5),
-                 liquid_superheat=1.9,
-                 equil_steps=100000, heat_steps=10000,
-                 dump_freq=10, dt=0.001, Q_cutoff=3.0, pressure=0.0001):
+                 template_dir=None):
 
         self.work_root = work_root
 
@@ -122,23 +101,6 @@ class EOSCalculator:
 
         # templates
         self.template_dir = template_dir if template_dir else _TEMPLATE_DIR
-
-        # temperature / simulation
-        self.two_phase_temps = two_phase_temps
-        self.two_phase_delta = two_phase_delta
-        self.two_phase_count = two_phase_count
-        self.two_phase_nz = two_phase_nz
-        self.npt_n = npt_n
-        self.npt_dT = npt_dT
-        self.npt_shift = npt_shift
-        self.supercell = supercell
-        self.liquid_superheat = liquid_superheat
-        self.equil_steps = equil_steps
-        self.heat_steps = heat_steps
-        self.dump_freq = dump_freq
-        self.dt = dt
-        self.Q_cutoff = Q_cutoff
-        self.pressure = pressure
 
         # state (set by subclass or batch runner)
         self.element = None
@@ -211,28 +173,12 @@ class EOSCalculator:
         print(f'[{self.element}] 总原子数: {natoms_total}')
         return natoms_total
 
-    def _get_two_phase_temps(self):
-        """Return candidate temperatures for two-phase runs.
-
-        Priority:
-          1. ``self.two_phase_temps`` (explicit list) — return as-is.
-          2. ``self.two_phase_delta`` + ``self.two_phase_count`` — generate
-             evenly-spaced temperatures centred at Tm.
-          3. Default: two_phase_delta=100, two_phase_count=3.
-        """
-        if self.two_phase_temps is not None:
-            return self.two_phase_temps
-        Tm = self._get_tm()
-        half = self.two_phase_count // 2
-        offsets = [i * self.two_phase_delta for i in range(-half, half + 1)]
-        return [int(Tm + off) for off in offsets]
-
-    def _get_npt_temps(self):
+    def _get_npt_temps(self, npt_n=5, npt_dT=100, npt_shift=-600):
         """Return NPT temperature series."""
         Tm = self._get_tm()
-        half = self.npt_n // 2
-        offsets = np.arange(self.npt_n) - half
-        temps = Tm + offsets * self.npt_dT + self.npt_shift
+        half = npt_n // 2
+        offsets = np.arange(npt_n) - half
+        temps = Tm + offsets * npt_dT + npt_shift
         return [int(t) for t in temps if t >= 250]
 
     # ---- paths --------------------------------------------------------------
@@ -261,16 +207,16 @@ class EOSCalculator:
             template_path=self.template_dir,
             template_file=template_file)
 
-    def _base_params(self):
+    def _base_params(self, dt=0.001, pressure=0.0001):
         return dict(
-            pressure=self.pressure,
-            dt=self.dt,
+            pressure=pressure,
+            dt=dt,
             elements=[dict(
                 id=1, name=self.element,
                 mass=_get_mass_map([self.element])[0])])
 
     def _resolve_slurm_config(self):
-        """Build Slurm config with priority: machine_template → constructor → fallback.
+        """Build Slurm config with priority: machine_template -> constructor -> fallback.
 
         Returns dict with keys: partition, nodes, ntasks_per_node,
         wall_time, gres, command, source_list, custom_flags, envs.
@@ -352,7 +298,7 @@ class EOSCalculator:
         return path
 
     def _submit_slurm_job(self, gen, job_name, submit=True):
-        """Write sbatch → optionally submit."""
+        """Write sbatch -> optionally submit."""
         cfg = self._resolve_slurm_config()
         self._write_sbatch(cfg, job_name, gen.work_path)
         if submit:
@@ -363,23 +309,34 @@ class EOSCalculator:
 
     # ---- Phase 1: two-phase melt determination ------------------------------
 
-    def generate_two_phase(self, nx=None, ny=None, nz=None):
+    def generate_two_phase(self,
+                           supercell=(5, 5, 10),
+                           two_phase_temps=None,
+                           two_phase_delta=100, two_phase_count=3,
+                           equil_steps=100000, heat_steps=10000,
+                           dt=0.001, pressure=0.0001, Q_cutoff=3.0,
+                           liquid_superheat=1.9):
         """Generate two-phase LAMMPS inputs at candidate temperatures."""
         Tm = self._get_tm()
-        temps = self._get_two_phase_temps()
+
+        if two_phase_temps is not None:
+            temps = two_phase_temps
+        else:
+            half = two_phase_count // 2
+            offsets = [i * two_phase_delta for i in range(-half, half + 1)]
+            temps = [int(Tm + off) for off in offsets]
+
         poscar = self._find_poscar()
         pot = self._find_pot()
 
-        _nx = nx if nx is not None else self.supercell[0]
-        _ny = ny if ny is not None else self.supercell[1]
-        _nz = nz if nz is not None else self.two_phase_nz
+        _nx, _ny, _nz = supercell
         self._get_natoms(poscar, _nx, _ny, _nz)
 
-        base = self._base_params()
+        base = self._base_params(dt=dt, pressure=pressure)
         base.update(
-            Q_cutoff=self.Q_cutoff,
-            heating_step=self.heat_steps,
-            equilibrate_step=self.equil_steps,
+            Q_cutoff=Q_cutoff,
+            heating_step=heat_steps,
+            equilibrate_step=equil_steps,
             nx=_nx, ny=_ny,
             nz=_nz)
 
@@ -392,7 +349,7 @@ class EOSCalculator:
             gen.update(dict(
                 base,
                 Tm_estimate=T_est,
-                T_superheat=int(self.liquid_superheat * Tm)))
+                T_superheat=int(liquid_superheat * Tm)))
             gen.render()
             self._two_phase_gens.append(gen)
 
@@ -438,21 +395,23 @@ class EOSCalculator:
 
     # ---- Phase 2: NPT property scan ----------------------------------------
 
-    def generate_npt(self, phases=('solid', 'liquid'), nx=None, ny=None, nz=None):
+    def generate_npt(self, phases=('solid', 'liquid'),
+                     supercell=(5, 5, 5),
+                     npt_n=5, npt_dT=100, npt_shift=-600,
+                     liquid_superheat=1.9,
+                     equil_steps=100000, dt=0.001, pressure=0.0001):
         """Generate NPT LAMMPS inputs at multiple temperatures."""
-        temps = self._get_npt_temps()
+        temps = self._get_npt_temps(npt_n, npt_dT, npt_shift)
         poscar = self._find_poscar(
             -1 if 'liquid' in phases and len(phases) > 1 else 0)
         pot = self._find_pot()
 
-        _nx = nx if nx is not None else self.supercell[0]
-        _ny = ny if ny is not None else self.supercell[1]
-        _nz = nz if nz is not None else self.supercell[2]
+        _nx, _ny, _nz = supercell
         self._get_natoms(poscar, _nx, _ny, _nz)
 
-        base = self._base_params()
+        base = self._base_params(dt=dt, pressure=pressure)
         base.update(
-            equilibrate_step=self.equil_steps,
+            equilibrate_step=equil_steps,
             nx=_nx, ny=_ny,
             nz=_nz)
 
@@ -469,7 +428,7 @@ class EOSCalculator:
                 if phase == 'liquid':
                     Tm = self._get_tm()
                     params['high_temperature'] = int(
-                        self.liquid_superheat * Tm)
+                        liquid_superheat * Tm)
                     params['is_dump'] = False
                 gen.update(params)
                 gen.render()
@@ -493,22 +452,24 @@ class EOSCalculator:
 
     # ---- Phase 3: NVT trajectory ------------------------------------------
 
-    def generate_nvt_traj(self, phases=('solid', 'liquid'), nx=None, ny=None, nz=None):
+    def generate_nvt_traj(self, phases=('solid', 'liquid'),
+                          supercell=(5, 5, 5),
+                          liquid_superheat=1.9,
+                          equil_steps=100000, dump_freq=10,
+                          dt=0.001, pressure=0.0001):
         """Generate NVT trajectory LAMMPS inputs."""
         Tm = int(self._get_tm())
         poscar = self._find_poscar(
             -1 if 'liquid' in phases and len(phases) > 1 else 0)
         pot = self._find_pot()
 
-        _nx = nx if nx is not None else self.supercell[0]
-        _ny = ny if ny is not None else self.supercell[1]
-        _nz = nz if nz is not None else self.supercell[2]
+        _nx, _ny, _nz = supercell
         self._get_natoms(poscar, _nx, _ny, _nz)
 
-        base = self._base_params()
+        base = self._base_params(dt=dt, pressure=pressure)
         base.update(
-            equilibrate_step=self.equil_steps,
-            dump_freq=self.dump_freq,
+            equilibrate_step=equil_steps,
+            dump_freq=dump_freq,
             nx=_nx, ny=_ny,
             nz=_nz)
 
@@ -523,7 +484,7 @@ class EOSCalculator:
             params = dict(base, temperature=Tm)
             if phase == 'liquid':
                 params['high_temperature'] = int(
-                    self.liquid_superheat * Tm)
+                    liquid_superheat * Tm)
             gen.update(params)
             gen.render()
             self._traj_gens.append(gen)
@@ -538,7 +499,7 @@ class EOSCalculator:
     # ---- full pipeline ----------------------------------------------------
 
     def run_all(self, submit=True):
-        """Convenience: run the full generate → submit pipeline."""
+        """Convenience: run the full generate -> submit pipeline."""
         self.generate_two_phase()
         self.submit_two_phase(submit=submit)
         self.generate_npt()
