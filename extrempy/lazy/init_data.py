@@ -4,10 +4,13 @@ import shutil
 import numpy as np
 import dpdata
 
+from .vasp import VASPReader
+
 
 def raw_to_set(out_dir, nline_per_set=100000):
     raw_names = ['box.raw', 'coord.raw', 'energy.raw', 'force.raw',
-                 'virial.raw', 'atom_ener.raw', 'fparam.raw', 'aparam.raw']
+                 'virial.raw', 'atom_ener.raw', 'fparam.raw', 'aparam.raw',
+                 'internal_energy.raw', 'ele_entropy.raw']
     for raw_name in raw_names:
         raw_path = os.path.join(out_dir, raw_name)
         if not os.path.exists(raw_path):
@@ -93,6 +96,24 @@ def bootstrap_init_data(aimd_dirs, sample_root,
         sub.to_deepmd_raw(out_dir)
         fpar = np.ones(n_selected).reshape(-1, 1) * fparam_K
         np.savetxt(os.path.join(out_dir, 'fparam.raw'), fpar)
+
+        # 解析 OUTCAR 提取内能 U 和电子熵 Se
+        frames_data = VASPReader.parse_outcar_frames(outcar)
+        if len(frames_data) == nframe:
+            A_all = np.array([f[0] for f in frames_data])
+            U_all = np.array([f[1] for f in frames_data])
+            Te_all = np.array([f[3] for f in frames_data])
+            A_sub2 = A_all[indices]
+            U_sub = U_all[indices]
+            Te_sub = Te_all[indices]
+            Se_sub = (U_sub - A_sub2) / Te_sub.clip(min=1.0)
+            np.savetxt(os.path.join(out_dir, 'internal_energy.raw'), U_sub.reshape(-1, 1))
+            np.savetxt(os.path.join(out_dir, 'ele_entropy.raw'), Se_sub.reshape(-1, 1))
+        else:
+            print(f"  WARNING: {label} frame count mismatch "
+                  f"(dpdata={nframe}, OUTCAR={len(frames_data)}), "
+                  f"skip internal_energy/ele_entropy")
+
         raw_to_set(out_dir)
         init_data_sys.append(label)
         phase = 'LIQ' if is_liquid else 'SOL'

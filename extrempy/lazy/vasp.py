@@ -261,6 +261,52 @@ class VASPReader:
                         print('CPU time: %.12f s' % self.cpu_time)
                     break
 
+        if hasattr(self, 'internal_energy') and hasattr(self, 'free_energy') and hasattr(self, 'ele_temp'):
+            self.entropy_product = self.internal_energy - self.free_energy
+            self.ele_entropy = self.entropy_product / self.ele_temp
+            if self.is_prinft:
+                print('Entropy product Te*Se: %.12f eV' % self.entropy_product)
+                print('Electronic entropy Se: %.12e eV/K' % self.ele_entropy)
+
+    @staticmethod
+    def parse_outcar_frames(outcar_path):
+        """Parse OUTCAR, return (free_energy, internal_energy, sigma_eV, ele_temp_K) per ionic step.
+
+        Uses 'FREE ENERGIE OF THE ION-ELECTRON SYSTEM (eV)' as the ionic step
+        boundary marker, which matches dpdata's frame separation.
+        """
+        frames = []
+        sigma = None
+        try:
+            fh = open(outcar_path)
+        except (FileNotFoundError, IOError):
+            return frames
+        with fh:
+            for line in fh:
+                if 'SIGMA = ' in line and sigma is None:
+                    sigma = float(line.split()[-1])
+                if 'FREE ENERGIE OF THE ION-ELECTRON SYSTEM (eV)' not in line:
+                    continue
+                try:
+                    line = next(fh)
+                    line = next(fh)  # free energy TOTEN line
+                    if 'free  energy' not in line:
+                        continue
+                    A = float(line.split()[-2])
+                    line = next(fh)  # blank line
+                    line = next(fh)  # energy without entropy line
+                    if 'without entropy' not in line:
+                        continue
+                    U = float(line.split()[-4])
+                except StopIteration:
+                    break
+                if sigma is not None:
+                    ele_temp_K = sigma / kb_eV
+                else:
+                    ele_temp_K = 0.0
+                frames.append((A, U, sigma or 0.0, ele_temp_K))
+        return frames
+
     def _plot_band(self, ax, cc='dimgray', ele_temp=None):
         ax.plot(self.band[:, 1], self.band[:, 2] / 2, 'o', ms=4,
                 mew=0.5, color=cc, mfc='none')

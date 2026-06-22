@@ -3,7 +3,9 @@ import json
 import shutil
 import glob
 
-from extrempy.lazy.vasp import VASPGenerator, _incar_dict, _render_incar
+import numpy as np
+
+from extrempy.lazy.vasp import VASPGenerator, VASPReader, _incar_dict, _render_incar
 from extrempy.lazy.dpgen import (DPGENGenerator,
                                  _generate_dpgen_machine_from_file,
                                  _generate_temp_list)
@@ -460,6 +462,30 @@ class DPBuilder:
 
             nf = sum(len(sub) for sub in ms.systems.values())
             print(f"  {label}: {nf} frames", end='')
+
+            # 从 task OUTCAR 提取内能 U 和电子熵 Se
+            task_outcars = sorted(glob.glob(
+                os.path.join(self.dpgen_dir, 'iter.*', '02.fp',
+                             f'task.{sys_idx:03d}.*', 'OUTCAR')))
+            if task_outcars:
+                U_list = []
+                Te_list = []
+                for oc in task_outcars:
+                    frames = VASPReader.parse_outcar_frames(oc)
+                    if frames:
+                        _, U, _, Te = frames[-1]
+                        U_list.append(U)
+                        Te_list.append(Te)
+                if len(U_list) == nf:
+                    U_arr = np.array(U_list)
+                    Te_arr = np.array(Te_list)
+                    A_arr = np.loadtxt(os.path.join(out_sub, 'energy.raw'))
+                    Se_arr = (U_arr - A_arr) / Te_arr.clip(min=1.0)
+                    np.savetxt(os.path.join(out_sub, 'internal_energy.raw'), U_arr.reshape(-1, 1))
+                    np.savetxt(os.path.join(out_sub, 'ele_entropy.raw'), Se_arr.reshape(-1, 1))
+                    print(f' (U+Se)', end='')
+                else:
+                    print(f' (WARN: OUTCAR frames {len(U_list)} != {nf})', end='')
 
             if fparam_vals and last_sys is not None:
                 natom = last_sys.get_natoms()
