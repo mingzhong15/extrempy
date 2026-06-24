@@ -10,3 +10,4 @@ jinja2
 monty
 ase
 tqdm
+requests

@@ -1,5 +1,6 @@
 from .lazy.lib import (ELEMENT_PHASE_DATA, ELEMENTS_BY_STRUCTURE,
                        get_phase_segments, get_viable_elements)
+from .lazy.mc3d import get_phases, list_phases, make_phase_segments, download_atoms
 from .lazy.potcar_map import PotcarMap, POTCAR_MAP
 from .lazy.vasp import VASPGenerator, VASPReader, _incar_dict, _render_incar
 from .lazy.dpgen import DPGENGenerator

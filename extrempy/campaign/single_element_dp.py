@@ -526,33 +526,73 @@ class DPBuilder:
 class ElementDPBuilder(DPBuilder):
     """v1: single-element DP potential across phases from RT to 2*Tm."""
 
-    def __init__(self, element, **kwargs):
+    def __init__(self, element, *,
+                 mc3d_mode=None,
+                 mc3d_method="pbesol-v2",
+                 target_atoms=100,
+                 supercell=None,
+                 **kwargs):
         super().__init__(**kwargs)
         self.element = element
         self.elements = [element]
         self.work_dir = os.path.join(self.work_root, element)
+        self.mc3d_mode = mc3d_mode
+        self.mc3d_method = mc3d_method
+        self.target_atoms = target_atoms
+        self.supercell = supercell
 
     def _get_tm(self):
         data = ELEMENT_PHASE_DATA.get(self.element, {})
         return data.get('Tm', 1000)
 
+    def list_mc3d_phases(self, mode=None, top_n=None):
+        """
+        Print MC3D phase table for this element.
+
+        Parameters
+        ----------
+        mode : str or None
+            None → self.mc3d_mode → 'ambient'.
+        top_n : int or None
+            Show only first N entries.
+
+        Returns
+        -------
+        list[dict]
+        """
+        from extrempy.lazy.mc3d import list_phases as _list
+        mode = mode or self.mc3d_mode or "ambient"
+        return _list(self.element, method=self.mc3d_method, mode=mode)
+
     def get_phase_segments(self):
         Tm = self._get_tm()
         T_min = 200 if Tm <= 500 else 300
-        segs = get_phase_segments(self.element, T_range=(T_min, None))
-        print(f"-- Phase Segments --  {self.element} (Tm={Tm}K, {len(segs)} phases)")
+
+        if self.mc3d_mode is not None:
+            from extrempy.lazy.mc3d import make_phase_segments as _mc3d
+            segs = _mc3d(self.element, method=self.mc3d_method,
+                         mode=self.mc3d_mode, Tm=Tm, T_min=T_min)
+        else:
+            segs = get_phase_segments(self.element, T_range=(T_min, None),
+                                      skip_unsupported=True)
+
+        print(f"-- Phase Segments -- {self.element} "
+              f"(Tm={Tm}K, {len(segs)} phases)")
         for i, s in enumerate(segs):
-            tc = s['T_core']
-            te = s['T_explore']
+            tc, te = s["T_core"], s["T_explore"]
             nT = len(_generate_temp_list(te[0], te[1]))
-            print(f"  [{i}] {s['label']} ({s['structure']})  "
+            sg = f" SG#{s['sg']}" if "sg" in s else ""
+            extra = f" [{s['phase_type']}]" if s.get("phase_type") else ""
+            print(f"  [{i}] {s['label']}{sg}{extra}  "
                   f"T_core=[{tc[0]:.0f},{tc[1]:.0f}]K  "
-                  f"T_explore=[{te[0]:.0f},{te[1]:.0f}]K  "
-                  f"{nT} T-points")
+                  f"T_explore=[{te[0]:.0f},{te[1]:.0f}]K  {nT} T-points")
         return segs
 
     def generate_poscars(self, segs):
-        from extrempy.structure import generate_element_structure
+        from extrempy.structure import (generate_element_structure,
+                                         calculate_supercell)
+        from ase.io import write
+        from ase.build import make_supercell
 
         DEFAULT_SUPERCELL = {
             'fcc': (2, 2, 2),
@@ -565,38 +605,72 @@ class ElementDPBuilder(DPBuilder):
         }
         self._ensure_dirs()
         self._segs = segs
+
+        # ── Pre-fetch MC3D UUID map if in MC3D mode ──
+        mc3d_map = {}
+        if self.mc3d_mode is not None:
+            from extrempy.lazy.mc3d import get_phases
+            mc3d_map = {
+                p["id"]: p["structure_uuid"]
+                for p in get_phases(self.element,
+                                    method=self.mc3d_method,
+                                    mode=self.mc3d_mode)
+            }
+
         print("-- POSCAR --")
         solid_poscar_path = None
         for seg in segs:
             label = seg['label']
             st = seg['structure']
             out_path = os.path.join(self.confs_dir, label + '.POSCAR')
-            if seg['label'].endswith('-LIQ'):
+            if label.endswith('-LIQ'):
                 print(f"  - {label}: from AIMD CONTCAR (placeholder)")
                 continue
-            sc = DEFAULT_SUPERCELL.get(st, (3, 3, 3))
             if os.path.exists(out_path):
                 print(f"  - {label}: POSCAR exists")
                 solid_poscar_path = out_path
                 continue
-            if st not in SUPPORTED_STRUCTURES:
+
+            # ── ASE generation (legacy) ──
+            if st in SUPPORTED_STRUCTURES:
+                sc = DEFAULT_SUPERCELL.get(st, (3, 3, 3))
+                atoms, _ = generate_element_structure(
+                    element=self.element,
+                    output_dir=self.confs_dir,
+                    supercell=sc,
+                    structure_type=st,
+                    verbose=False)
+                generated = glob.glob(os.path.join(
+                    self.confs_dir, self.element + '-' + st.upper() + '*.POSCAR'))
+                if generated and os.path.basename(generated[0]) != label + '.POSCAR':
+                    os.rename(generated[0], out_path)
+                print(f"  \u2713 {os.path.basename(out_path)} ({len(atoms)} atoms)")
+
+            # ── MC3D download ──
+            elif st == "mc3d":
+                from extrempy.lazy.mc3d import download_atoms
+                uid = seg.get("structure_uuid")
+                if not uid:
+                    uid = mc3d_map.get(seg.get("mc3d_id"))
+                if not uid:
+                    raise ValueError(
+                        f"No structure_uuid for {label} "
+                        f"(mc3d_id={seg.get('mc3d_id')})")
+                atoms = download_atoms(uid, method=self.mc3d_method)
+                sc = calculate_supercell(len(atoms),
+                                         target_atoms=self.target_atoms)
+                atoms = make_supercell(atoms, np.diag(sc))
+                write(out_path, atoms, format="vasp", direct=True)
+                print(f"  \u2713 {os.path.basename(out_path)} "
+                      f"({len(atoms)} atoms, "
+                      f"sc={sc[0]}x{sc[1]}x{sc[2]}, from MC3D)")
+
+            else:
                 raise FileNotFoundError(
-                    f"{out_path} not found. Structure type '{st}' is not "
-                    f"ASE-generatable.\n"
-                    f"  Use prepare_confs({self.element!r}, work_root=..., "
-                    f"structure_sources=[...]) to populate from external sources.")
-            atoms, _ = generate_element_structure(
-                element=self.element,
-                output_dir=self.confs_dir,
-                supercell=sc,
-                structure_type=st,
-                verbose=False)
-            generated = glob.glob(os.path.join(
-                self.confs_dir, self.element + '-' + st.upper() + '*.POSCAR'))
-            if generated and os.path.basename(generated[0]) != label + '.POSCAR':
-                os.rename(generated[0], out_path)
+                    f"Structure type '{st}' not supported for {label}.\n"
+                    f"  Use mc3d_mode='ambient' to fetch from MC3D.")
+
             solid_poscar_path = out_path
-            print(f"  \u2713 {os.path.basename(out_path)} ({len(atoms)} atoms)")
 
 
 def build_all_elements(work_root, elements=None, **kwargs):

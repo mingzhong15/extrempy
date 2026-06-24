@@ -120,6 +120,34 @@ def _to_supercell_matrix(supercell):
     )
 
 
+def calculate_supercell(n_atoms_cell, target_atoms=100):
+    """
+    Calculate optimal isotropic supercell (nx, ny, nz).
+
+    Parameters
+    ----------
+    n_atoms_cell : int
+        Number of atoms in the primitive cell.
+    target_atoms : int
+        Target total number of atoms.
+
+    Returns
+    -------
+    (int, int, int)
+    """
+    ratio = target_atoms / n_atoms_cell
+    n = max(1, int(np.round(ratio ** (1 / 3))))
+    best, best_diff = None, float("inf")
+    for nx in range(max(1, n - 1), n + 2):
+        for ny in range(max(1, n - 1), n + 2):
+            for nz in range(max(1, n - 1), n + 2):
+                n_total = nx * ny * nz * n_atoms_cell
+                diff = abs(n_total - target_atoms)
+                if diff < best_diff:
+                    best_diff, best = diff, (nx, ny, nz)
+    return best
+
+
 # ──────────────────────────────────────────────
 #  Public API – existing
 # ──────────────────────────────────────────────
