@@ -144,6 +144,7 @@ class EOSCalculator:
           1. ``self.poscar_path`` (explicit file)
           2. ``self.poscar_dir`` → glob ``{element}-*POSCAR``
           3. ``self.dpgen_dir`` → glob ``{dpgen_dir}/{element}/confs/*.POSCAR``
+          4. auto-generate from ``ELEMENT_PHASE_DATA`` (primitive cell)
         """
         if self.poscar_path:
             return self.poscar_path
@@ -159,6 +160,15 @@ class EOSCalculator:
             files = sorted(glob.glob(pat))
             if files:
                 return files[idx]
+
+        # 4th priority: auto-generate from local ELEMENT_PHASE_DATA
+        from extrempy.structure import _get_local_candidates, save_structures
+        cands = _get_local_candidates(self.element)
+        if cands:
+            out_dir = os.path.join(self._element_dir, 'confs')
+            saved = save_structures(
+                cands[:1], out_dir, supercell=(1, 1, 1))
+            return next(iter(saved.values()))
 
         raise FileNotFoundError(
             f'No POSCAR found for {self.element}. '

@@ -368,6 +368,151 @@ def prepare_confs(element, work_root,
 
 
 # ──────────────────────────────────────────────
+#  Public API – list / save structures
+# ──────────────────────────────────────────────
+
+def _get_local_candidates(element):
+    """Return structure candidates from ELEMENT_PHASE_DATA (no MC3D)."""
+    candidates = []
+    data = ELEMENT_PHASE_DATA.get(element)
+    if data is None:
+        return candidates
+    for phase in data.get('phases', []):
+        st = phase['structure']
+        if st not in SUPPORTED_STRUCTURES:
+            continue
+        a = phase.get('a', '?')
+        lattice_str = f'a={a}' + (f', c={phase["c"]}' if 'c' in phase else '')
+        rt_mark = ' [rt]' if st == data.get('rt_structure') else ''
+        candidates.append({
+            'id': f'{element}-{st.upper()}',
+            'source': 'local',
+            'element': element,
+            'structure_type': st,
+            'natoms_prim': ELEMENT_PRIMITIVE_ATOMS.get(st, 1),
+            'notes': f'{lattice_str}, {phase["T_min"]}-{phase["T_max"]}K{rt_mark}',
+        })
+    return candidates
+
+
+def list_structures(element, sources=('local', 'mc3d'),
+                    mc3d_method='pbesol-v2', mc3d_mode='ambient'):
+    """Discover and display structure candidates for an element.
+
+    Parameters
+    ----------
+    element : str
+    sources : tuple of str
+        ``'local'`` — query ``ELEMENT_PHASE_DATA``.
+        ``'mc3d'``  — query the MC3D REST API.
+    mc3d_method, mc3d_mode : str
+        Forwarded to ``mc3d.get_phases`` (ignored when ``'mc3d'``
+        not in *sources*).
+
+    Returns
+    -------
+    list[dict]
+    """
+    candidates = []
+
+    if 'local' in sources:
+        candidates.extend(_get_local_candidates(element))
+
+    if 'mc3d' in sources:
+        try:
+            from .lazy.mc3d import get_phases
+            phases = get_phases(element, method=mc3d_method, mode=mc3d_mode)
+            for p in phases:
+                e_pa = (f'{p["energy_per_atom"]:.4f} eV/atom'
+                        if p['energy_per_atom'] is not None else '? eV/atom')
+                candidates.append({
+                    'id': p['id'],
+                    'source': 'mc3d',
+                    'element': element,
+                    'structure_uuid': p['structure_uuid'],
+                    'natoms_prim': p['n_atoms_cell'],
+                    'notes': f'SG#{p["sg"]} {p["spg_intl"]}, '
+                             f'{p["phase_type"]}, {e_pa}',
+                })
+        except Exception as e:
+            print(f'  MC3D unavailable: {e}')
+
+    # ── table ──
+    if candidates:
+        print()
+        print(f'─── Structure Candidates: {element} ───')
+        header = (f'  {"#":<4s} {"ID":<16s} {"Source":<6s} '
+                  f'{"Prim":>4s}  Notes')
+        print(header)
+        print(f'  {"─" * 70}')
+        for i, c in enumerate(candidates):
+            st = (c.get('structure_type', '') or
+                  c.get('structure_uuid', '')[:8] or '-')
+            print(f'  {i:<4d} {c["id"]:<16s} {c["source"]:<6s} '
+                  f'{c["natoms_prim"]:4d}  {c["notes"]}')
+        print(f'  {"─" * 70}')
+        print(f'  {len(candidates)} candidate(s).')
+        print()
+    else:
+        print(f'  No candidates found for {element}.')
+
+    return candidates
+
+
+def save_structures(candidates, output_dir, max_atoms=None, supercell=None):
+    """Generate POSCAR files from structure candidates.
+
+    ``max_atoms`` takes priority over ``supercell`` when both are given.
+    File naming: ``{id}-{natoms}.POSCAR``.
+
+    Parameters
+    ----------
+    candidates : list[dict]
+        One or more dicts from ``list_structures()`` or
+        ``_get_local_candidates()``.
+    output_dir : str
+    max_atoms : int or None
+        Target atom count — auto-compute supercell via
+        ``calculate_supercell()``.  Ignored when ``None``.
+    supercell : int or (int, int, int) or None
+        Explicit supercell.  Ignored when *max_atoms* is set.
+
+    Returns
+    -------
+    dict
+        ``{id: path_to_POSCAR}``
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    results = {}
+
+    for c in candidates:
+        if c['source'] == 'local':
+            atoms, _ = _generate_atoms(
+                c['element'], c['structure_type'],
+                supercell=None, target_atoms=1)
+        elif c['source'] == 'mc3d':
+            from .lazy.mc3d import download_atoms
+            atoms = download_atoms(c['structure_uuid'])
+        else:
+            continue
+
+        n_prim = len(atoms)
+        if max_atoms is not None:
+            sc = calculate_supercell(n_prim, max_atoms)
+            atoms = make_supercell(atoms, np.diag(sc))
+        elif supercell is not None:
+            atoms = make_supercell(atoms, _to_supercell_matrix(supercell))
+
+        filename = f"{c['id']}-{len(atoms)}.POSCAR"
+        path = os.path.join(output_dir, filename)
+        write(path, atoms, format='vasp', direct=True)
+        results[c['id']] = path
+        print(f'  {filename}')
+
+    return results
+
+
+# ──────────────────────────────────────────────
 #  Legacy batch helpers (unchanged)
 # ──────────────────────────────────────────────
 
