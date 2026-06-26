@@ -478,13 +478,33 @@ class EOSCalculator:
             self._submit_slurm_job(gen, job_name, submit=submit)
 
     def analyze_npt(self):
-        """Process NPT directories and return summary DataFrame."""
-        from extrempy.md.thermo import process_npt_directories
-        summary, _ = process_npt_directories(
-            base_dir=self.npt_dir,
-            element=self.element,
-            phases=['solid', 'liquid'])
-        return summary
+        """Read each ``thermo.dat`` and return a summary DataFrame.
+
+        Columns include temperature, phase, and per-column averages from
+        the LAMMPS thermo output (energy, free\_energy, ele\_entropy,
+        volume, density, …).
+        """
+        import pandas as pd
+        from extrempy.md.thermo import read_thermo_dat
+
+        rows = []
+        for gen in getattr(self, '_npt_gens', []):
+            T = gen.params.get('temperature')
+            phase = 'liquid' if 'high_temperature' in gen.params else 'solid'
+            thermo_file = os.path.join(gen.work_path, 'thermo.dat')
+            if not os.path.exists(thermo_file):
+                continue
+            _, averages, _ = read_thermo_dat(thermo_file)
+            if averages is None:
+                continue
+            row = {'temperature': T, 'phase': phase}
+            for col, stats in averages.items():
+                row[f'{col}_mean'] = stats['mean']
+            rows.append(row)
+        df = pd.DataFrame(rows)
+        if not df.empty:
+            df = df.sort_values('temperature').reset_index(drop=True)
+        return df
 
     # ---- Phase 3: NVT trajectory ------------------------------------------
 
