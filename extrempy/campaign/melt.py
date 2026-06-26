@@ -402,9 +402,23 @@ class EOSCalculator:
                      supercell=(5, 5, 5),
                      npt_n=5, npt_dT=100, npt_shift=-600,
                      liquid_superheat=1.9,
-                     equil_steps=100000, dt=0.001, pressure=0.0001):
-        """Generate NPT LAMMPS inputs at multiple temperatures."""
-        temps = self._get_npt_temps(npt_n, npt_dT, npt_shift)
+                     equil_steps=100000, dt=0.001, pressure=0.0001,
+                     output_internal=False,
+                     latt_temp_list=None):
+        """Generate NPT LAMMPS inputs at multiple temperatures.
+
+        Parameters
+        ----------
+        output_internal : bool
+            When True, use entropy-enabled templates that output internal
+            energy (U = F + T*S) via ``out_internal_energy`` pair_style
+            keyword, plus ``ele_entropy`` and ``free_energy`` computes.
+        latt_temp_list : list of int, optional
+            Explicit temperature series.  When given, ``npt_n`` / ``npt_dT`` /
+            ``npt_shift`` are ignored.
+        """
+        temps = latt_temp_list if latt_temp_list is not None \
+            else self._get_npt_temps(npt_n, npt_dT, npt_shift)
         print(f'[{self.element}] NPT temperature series : {temps}')
         poscar = self._find_poscar(
             -1 if 'liquid' in phases and len(phases) > 1 else 0)
@@ -421,7 +435,12 @@ class EOSCalculator:
 
         self._npt_gens = []
         for phase in phases:
-            template = 'npt-liquid.j2' if phase == 'liquid' else 'npt-solid.j2'
+            if output_internal:
+                template = ('npt-entropy-liquid.j2' if phase == 'liquid'
+                            else 'npt-entropy-solid.j2')
+            else:
+                template = ('npt-liquid.j2' if phase == 'liquid'
+                            else 'npt-solid.j2')
             for T in temps:
                 work_dir = os.path.join(
                     self.npt_dir, f'{T}k_{phase}')
@@ -429,6 +448,9 @@ class EOSCalculator:
                 gen = self._build_gen(work_dir, template)
                 gen.get_files(poscar_path=poscar, pot_path=pot)
                 params = dict(base, temperature=T)
+                if output_internal:
+                    model_ext = os.path.splitext(pot)[1] or '.pb'
+                    params['model_name'] = f'cp{model_ext}'
                 if phase == 'liquid':
                     Tm = self._get_tm()
                     params['high_temperature'] = int(

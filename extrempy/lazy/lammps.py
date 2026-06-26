@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import json
+import shutil
 
 from jinja2 import Environment, FileSystemLoader
 import ase
@@ -42,8 +43,9 @@ class LAMMPSGenerator(InputGenerator):
         ss = ase.io.read(poscar_path, format='vasp')
         ss.write( os.path.join(self.work_path, 'confs.data'), format='lammps-data')
 
-        cmd = 'cp %s %s/cp.pb'%(pot_path, self.work_path)
-        os.system(cmd)
+        # preserve original extension so LAMMPS can infer backend (.pth / .pb / .pt2)
+        ext = os.path.splitext(pot_path)[1] or '.pb'
+        shutil.copy2(pot_path, os.path.join(self.work_path, f'cp{ext}'))
 
 class LAMMPSInputGenerator:
 
