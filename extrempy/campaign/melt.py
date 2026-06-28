@@ -296,6 +296,7 @@ class EOSCalculator:
             lines.append(f'export {k}={v}')
 
         lines.append('')
+        lines.append('mkdir -p traj')
         cmd = cfg['command']
         total_ranks = cfg['nodes'] * cfg['ntasks_per_node']
         if total_ranks > 1 and not any(x in cmd for x in ['mpirun', 'srun', 'mpiexec']):
