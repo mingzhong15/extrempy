@@ -62,6 +62,7 @@ def parse_machine_json(path, section='model_devi'):
         ngpu = res.get('gpu_per_node', 0)
         cfg['gres'] = f'gpu:{ngpu}' if ngpu else None
 
+    cfg['cores_per_node'] = cfg.get('ntasks_per_node')
     cfg['command'] = raw.get('command')
     cfg['source_list'] = res.get('source_list', [])
     cfg['custom_flags'] = res.get('custom_flags', [])

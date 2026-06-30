@@ -11,6 +11,22 @@ from extrempy.lazy.base import parse_machine_json
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 
 
+def recommend_mpi_layout(natoms, nodes, ntasks_per_node):
+    """Check atoms-per-task ratio and suggest MPI layout if too low.
+
+    Returns ``(ok, atoms_per_task, suggestion)``.
+    """
+    ntasks = nodes * ntasks_per_node
+    apt = natoms / max(ntasks, 1)
+    if apt >= 500:
+        return True, apt, ''
+    ideal_tasks = max(1, natoms // 800)
+    ideal_nodes = max(1, (ideal_tasks + ntasks_per_node - 1) // ntasks_per_node)
+    return False, apt, (
+        f'atoms/task={apt:.0f} < 500, '
+        f'suggest ~{ideal_tasks} MPI tasks ({ideal_nodes} node(s))')
+
+
 class EOSCalculator:
     """LAMMPS-based Equation-of-State and melt determination pipeline.
 
@@ -288,6 +304,15 @@ class EOSCalculator:
                 lines.append(flag)
         lines.append('')
         lines.append(f'cd {work_dir}')
+
+        # auto-inject --cpus-per-task + OMP_NUM_THREADS when user reduces ntasks
+        cores = cfg.get('cores_per_node')
+        ntasks = cfg.get('ntasks_per_node')
+        if cores and ntasks and cores > ntasks and cores % ntasks == 0:
+            cpt = cores // ntasks
+            if cpt > 1:
+                lines.insert(4, f'#SBATCH --cpus-per-task={cpt}')
+                lines.append(f'export OMP_NUM_THREADS={cpt}')
 
         # environment setup from machine_template
         for src in cfg.get('source_list', []):

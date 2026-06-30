@@ -55,10 +55,9 @@ compute 	    cells all chunk/atom bin/1d z lower 0.1 units reduced
 
 compute		    KE all ke/atom
 compute		    PE all pe/atom
-compute 	    STRESS all centroid/stress/atom NULL virial
-compute		    VOL all voronoi/atom
-
-variable	    virial_atom atom -(c_STRESS[1]+c_STRESS[2]+c_STRESS[3])/(3*c_VOL[1])
+#compute 	    STRESS all centroid/stress/atom NULL virial
+#compute		    VOL all voronoi/atom
+#variable	    virial_atom atom -(c_STRESS[1]+c_STRESS[2]+c_STRESS[3])/(3*c_VOL[1])
 
 compute 	    Q all orientorder/atom degrees 2 4 6 cutoff {{Q_cutoff | default('3.0')}}
 
@@ -71,7 +70,7 @@ fix             1 all npt temp ${T1} ${T1} 0.1 aniso $p $p 0.5
 run            	10000
 unfix           1
 
-fix             CHUNK all ave/chunk 1 1 1000 cells density/mass temp v_virial_atom c_Q[1] c_Q[2] file chunk.profile
+fix             CHUNK all ave/chunk 1 1 1000 cells density/mass temp c_Q[1] c_Q[2] file chunk.profile
 
 # heat uppper part to obtain liquid phase
 variable        DUMP_STEP equal 5000
@@ -95,6 +94,12 @@ unfix           1
 fix             1 top npt temp ${T1} ${T1} 0.1 z $p $p 1  
 run             $t
 unfix           1
+
+unfix           CHUNK
+compute         STRESS all centroid/stress/atom NULL virial
+compute         VOL all voronoi/atom
+variable        virial_atom atom -(c_STRESS[1]+c_STRESS[2]+c_STRESS[3])/(3*c_VOL[1])
+fix             CHUNK all ave/chunk 1 1 1000 cells density/mass temp v_virial_atom c_Q[1] c_Q[2] file chunk.profile
 
 write_restart   ${T1}.NPT.restart
 
