@@ -148,8 +148,264 @@ def calculate_supercell(n_atoms_cell, target_atoms=100):
     return best
 
 
+# Default supercell sizes per standard structure type (used by ase_source
+# when neither `supercell` nor `target_atoms` forces a different choice).
+DEFAULT_SUPERCELL = {
+    'fcc': (2, 2, 2),
+    'bcc': (3, 3, 3),
+    'hcp': (3, 3, 4),
+    'diamond': (2, 2, 2),
+    'dhcp': (3, 3, 2),
+    'sc': (3, 3, 3),
+    'bct': (3, 3, 3),
+}
+
+
 # ──────────────────────────────────────────────
-#  Public API – existing
+#  Structure sources — factories returning () -> ase.Atoms
+# ──────────────────────────────────────────────
+
+def ase_source(element, structure_type=None, supercell=None, target_atoms=100):
+    """Return a callable that builds an ase.Atoms via ASE ``bulk()``.
+
+    When *structure_type* is None, auto-detects from
+    ``ELEMENT_PHASE_DATA[element]['rt_structure']``.
+    """
+    def _make():
+        st = structure_type
+        if st is None:
+            rt = ELEMENT_PHASE_DATA.get(element, {}).get('rt_structure')
+            st = rt or 'fcc'
+        sc = supercell or DEFAULT_SUPERCELL.get(st)
+        atoms, _ = _generate_atoms(element, st, supercell=sc,
+                                    target_atoms=target_atoms)
+        return atoms
+    return _make
+
+
+def mc3d_source(structure_uuid, supercell=None, target_atoms=100,
+                method='pbesol-v2'):
+    """Return a callable that downloads a structure from MC3D."""
+    def _make():
+        from .lazy.mc3d import download_atoms
+        atoms = download_atoms(structure_uuid, method=method)
+        if supercell is not None:
+            atoms = make_supercell(atoms, _to_supercell_matrix(supercell))
+        else:
+            sc = calculate_supercell(len(atoms), target_atoms)
+            atoms = make_supercell(atoms, np.diag(sc))
+        return atoms
+    return _make
+
+
+# ──────────────────────────────────────────────
+#  Unified resolver
+# ──────────────────────────────────────────────
+
+def resolve_poscar(element, label, *, confs_dir, source,
+                   force=False, verbose=True):
+    """Resolve a structure to ``{confs_dir}/{label}.POSCAR``.
+
+    This is the single entry point used by both :class:`DPBuilder` and
+    :class:`EOSCalculator`.  It handles only the "already exists /
+    LIQ placeholder / write file" concerns; the actual structure
+    production is delegated to *source*.
+
+    Parameters
+    ----------
+    element : str
+    label : str
+        Output filename stem.  Labels ending in ``'-LIQ'`` are treated
+        as liquid placeholders and skipped (returns ``None``).
+    confs_dir : str
+    source : callable or ase.Atoms or str
+        - callable: ``() -> ase.Atoms`` (e.g. from
+          :func:`ase_source` / :func:`mc3d_source`)
+        - ``ase.Atoms``: used directly
+        - ``str``: path to an existing POSCAR/CIF/vasp file, read in
+    force : bool
+        Overwrite an existing POSCAR at the target path.
+    verbose : bool
+
+    Returns
+    -------
+    str or None
+        Path to the POSCAR, or ``None`` for LIQ placeholders.
+    """
+    out_path = os.path.join(confs_dir, f'{label}.POSCAR')
+
+    if label.endswith('-LIQ'):
+        if verbose:
+            print(f'  - {label}: LIQ (placeholder, from AIMD CONTCAR)')
+        return None
+
+    if os.path.exists(out_path) and not force:
+        if verbose:
+            try:
+                n = len(read(out_path, format='vasp'))
+            except Exception:
+                n = 0
+            print(f'  - {label}: exists ({n} atoms, skip)')
+        return out_path
+
+    # Obtain atoms from source.
+    if callable(source):
+        atoms = source()
+    elif hasattr(source, 'get_positions'):
+        atoms = source
+    elif isinstance(source, str):
+        if not os.path.exists(source):
+            raise FileNotFoundError(f'source path not found: {source}')
+        atoms = read(source, format='vasp')
+    else:
+        raise TypeError(
+            f'source must be callable, ase.Atoms, or path str; '
+            f'got {type(source)}')
+
+    os.makedirs(confs_dir, exist_ok=True)
+    write(out_path, atoms, format='vasp', direct=True)
+    if verbose:
+        print(f'  \u2713 {label}: {len(atoms)} atoms -> {out_path}')
+    return out_path
+
+
+def _file_source_resolve(lib_path, label):
+    """Try to load a structure from a directory.
+
+    Looks for {label}.POSCAR, {label}.cif, or {label}.vasp (in that order).
+    Returns ase.Atoms or None.
+    """
+    for ext, fmt in [('.POSCAR', 'vasp'), ('.cif', 'cif'), ('.vasp', 'vasp')]:
+        path = os.path.join(lib_path, f'{label}{ext}')
+        if os.path.exists(path):
+            return read(path, format=fmt)
+    return None
+
+
+def prepare_confs(element, work_root,
+                  structure_sources=None,
+                  segs=None,
+                  supercell=None,
+                  force=False):
+    """Prepare POSCAR files for all phases of *element* into
+    ``{work_root}/{element}/confs/``.
+
+    Thin batch wrapper around :func:`resolve_poscar`.  For every
+    phase segment (from :func:`get_phase_segments` or passed
+    explicitly via *segs*) a structure source is constructed and
+    passed to ``resolve_poscar``.
+
+    Source selection per seg:
+
+    1. If ``seg['structure']`` is in :data:`SUPPORTED_STRUCTURES` →
+       :func:`ase_source`.
+    2. Else if ``structure_sources`` is given, try each in order:
+
+       - ``str`` → directory; looked up via
+         :func:`_file_source_resolve` (supports ``.POSCAR`` /
+         ``.cif`` / ``.vasp``).  The resolved file path is passed
+         directly to ``resolve_poscar``.
+       - ``callable(element, label, structure_type)`` → must return
+         an ``ase.Atoms``, a file path (``str``), or ``None``.
+
+    Returns
+    -------
+    dict
+        ``{label: {'path': ..., 'status': 'ok'|'skipped'|'skipped_liq'|'error', ...}}``
+
+    Parameters
+    ----------
+    element : str
+    work_root : str
+    structure_sources : list[str | callable], optional
+    segs : list[dict], optional
+        If ``None``, auto-detected via
+        ``get_phase_segments(..., skip_unsupported=False)``.
+    supercell : int or (int, int, int), optional
+        Applied to ASE-generated structures (passed through to
+        :func:`ase_source`).
+    force : bool
+        Overwrite existing POSCAR files.
+    """
+    confs_dir = os.path.join(work_root, element, 'confs')
+    if segs is None:
+        segs = get_phase_segments(element, skip_unsupported=False)
+
+    results = {}
+    for seg in segs:
+        label = seg['label']
+        st = seg.get('structure')
+        target = os.path.join(confs_dir, f'{label}.POSCAR')
+
+        # Build the source for this seg.
+        if st in SUPPORTED_STRUCTURES:
+            src = ase_source(element, structure_type=st,
+                             supercell=supercell)
+        elif structure_sources:
+            src = None
+            for s in structure_sources:
+                try:
+                    if isinstance(s, str):
+                        found = _file_source_resolve(s, label)
+                        if found is not None:
+                            src = found   # an Atoms object, passed as-is
+                    elif callable(s):
+                        r = s(element, label, st)
+                        if r is not None:
+                            if isinstance(r, str):
+                                src = r    # path str
+                            elif hasattr(r, 'get_positions'):
+                                src = r    # Atoms
+                    if src is not None:
+                        break
+                except Exception as e:
+                    print(f'  - {label}: source error ({e})')
+            if src is None:
+                print(f'  - {label}: no source resolved')
+                results[label] = {'status': 'error',
+                                  'error': 'no source resolved'}
+                continue
+            # Apply supercell to file/callable sources (ASE source already
+            # applied it internally via _generate_atoms).
+            if supercell is not None and hasattr(src, 'get_positions'):
+                src = make_supercell(src, _to_supercell_matrix(supercell))
+        else:
+            print(f'  - {label}: structure type {st!r} not supported '
+                  f'and no structure_sources given')
+            results[label] = {'status': 'error',
+                              'error': f'unsupported structure {st!r}'}
+            continue
+
+        try:
+            path = resolve_poscar(element, label, confs_dir=confs_dir,
+                                  source=src, force=force, verbose=True)
+            if path is None:
+                results[label] = {'status': 'skipped_liq'}
+            elif path == target and not force and os.path.exists(target):
+                # resolve_poscar printed "exists"; we still record n_atoms
+                try:
+                    n = len(read(path, format='vasp'))
+                except Exception:
+                    n = 0
+                results[label] = {'path': path, 'n_atoms': n,
+                                  'status': 'skipped'}
+            else:
+                try:
+                    n = len(read(path, format='vasp'))
+                except Exception:
+                    n = 0
+                results[label] = {'path': path, 'n_atoms': n,
+                                  'status': 'ok'}
+        except Exception as e:
+            print(f'  - {label}: resolve_poscar failed ({e})')
+            results[label] = {'status': 'error', 'error': str(e)}
+
+    return results
+
+
+# ──────────────────────────────────────────────
+#  Legacy single-element helper (kept as a simpler alternative to
+#  resolve_poscar when batch/segment logic is not needed)
 # ──────────────────────────────────────────────
 
 def generate_element_structure(element,
@@ -206,375 +462,3 @@ def generate_element_structure(element,
         )
 
     return atoms, poscar_path
-
-
-# ──────────────────────────────────────────────
-#  Public API – new
-# ──────────────────────────────────────────────
-
-def _file_source_resolve(lib_path, label):
-    """Try to load a structure from a directory.
-
-    Looks for {label}.POSCAR, {label}.cif, or {label}.vasp (in that order).
-    Returns ase.Atoms or None.
-    """
-    for ext, fmt in [('.POSCAR', 'vasp'), ('.cif', 'cif'), ('.vasp', 'vasp')]:
-        path = os.path.join(lib_path, f'{label}{ext}')
-        if os.path.exists(path):
-            return read(path, format=fmt)
-    return None
-
-
-def prepare_confs(element, work_root,
-                  structure_sources=None,
-                  segs=None,
-                  supercell=None,
-                  force=False):
-    """Prepare POSCAR files for all phases of *element* into
-    ``{work_root}/{element}/confs/``.
-
-    For every phase segment (from ``get_phase_segments`` or passed
-    explicitly via *segs*):
-
-    1. Skip LIQ phases (they are populated later from AIMD CONTCAR).
-    2. If the target POSCAR already exists and *force* is False → skip.
-    3. Try ASE ``_generate_atoms`` for standard structure types
-       (fcc, bcc, hcp, dhcp, diamond, sc, bct).
-    4. Try each entry in *structure_sources* in order:
-
-       - ``str`` → treated as a directory path; looked up via
-         ``_file_source_resolve`` (supports ``.POSCAR``, ``.cif``,
-         ``.vasp``).
-       - ``callable(element, label, structure_type)`` → must return
-         an ``ase.Atoms`` object, a file path (``str``), or ``None``.
-
-    Returns a dict::
-
-        {label: {'path': ..., 'n_atoms': ..., 'source': ...,
-                 'status': 'ok'|'skipped'|'skipped_liq'|'error'}}
-
-    Parameters
-    ----------
-    element : str
-        Element symbol (e.g. ``'Ga'``, ``'Bi'``).
-    work_root : str
-        Root working directory. The confs directory is
-        ``{work_root}/{element}/confs/``.
-    structure_sources : list[str | callable], optional
-        Additional structure sources tried after ASE generation fails
-        (or for structure types not supported by ASE). Each entry:
-
-        - ``str`` – path to a directory containing
-          ``{label}.POSCAR`` / ``.cif`` / ``.vasp`` files.
-        - ``callable(element, label, structure_type)`` – returns
-          ``ase.Atoms``, a file path, or ``None``.
-    segs : list[dict], optional
-        Phase segment list. If ``None``, auto-detected via
-        ``get_phase_segments(..., skip_unsupported=False)``.
-    supercell : int or (int, int, int), optional
-        Supercell expansion applied to structures obtained from
-        *structure_sources* (ASE-generated structures already have
-        supercell applied internally).  ``None`` → no expansion.
-    force : bool
-        Overwrite existing POSCAR files (default ``False``).
-    """
-    confs_dir = os.path.join(work_root, element, 'confs')
-    os.makedirs(confs_dir, exist_ok=True)
-
-    if segs is None:
-        segs = get_phase_segments(element, skip_unsupported=False)
-
-    results = {}
-    for seg in segs:
-        label = seg['label']
-        st = seg.get('structure')
-        target = os.path.join(confs_dir, f'{label}.POSCAR')
-
-        if label.endswith('-LIQ'):
-            print(f"  - {label}: LIQ (placeholder, from AIMD CONTCAR)")
-            results[label] = {'status': 'skipped_liq'}
-            continue
-
-        if os.path.exists(target) and not force:
-            try:
-                n_atoms = len(read(target, format='vasp'))
-            except Exception:
-                n_atoms = 0
-            print(f"  - {label}: exists ({n_atoms} atoms, skip)")
-            results[label] = {
-                'path': target, 'n_atoms': n_atoms, 'status': 'skipped'
-            }
-            continue
-
-        atoms = None
-        source_desc = 'none'
-
-        if st in SUPPORTED_STRUCTURES:
-            try:
-                atoms, n = _generate_atoms(element, st, supercell=None)
-                source_desc = 'ASE'
-                print(f"  - {label}: ASE ({n} atoms)")
-            except Exception as e:
-                print(f"  - {label}: ASE failed ({e})")
-
-        if atoms is None and structure_sources:
-            for src_idx, src in enumerate(structure_sources):
-                try:
-                    if isinstance(src, str):
-                        result = _file_source_resolve(src, label)
-                        if result is not None:
-                            atoms = result
-                            source_desc = f'file[{src}]'
-                    elif callable(src):
-                        result = src(element, label, st)
-                        if result is not None:
-                            if isinstance(result, str):
-                                atoms = read(result, format='vasp')
-                            elif hasattr(result, 'get_positions'):
-                                atoms = result
-                            else:
-                                continue
-                            source_desc = f'callable[{src_idx}]'
-                    if atoms is not None:
-                        break
-                except Exception as e:
-                    print(f"  - {label}: source[{src_idx}] error ({e})")
-                    continue
-
-        if atoms is None:
-            msg = (
-                f"No structure available for '{label}' (type='{st}').\n"
-                f"  Place a POSCAR manually at:\n"
-                f"    {target}\n"
-                f"  or use prepare_confs({element!r}, work_root=...,\n"
-                f"    structure_sources=[...]) with a suitable source."
-            )
-            print(f"  - {label}: {msg}")
-            results[label] = {'status': 'error', 'error': msg}
-            continue
-
-        if supercell is not None and source_desc != 'ASE':
-            atoms = make_supercell(atoms, _to_supercell_matrix(supercell))
-
-        write(target, atoms, format='vasp', direct=True)
-        n_atoms = len(atoms)
-        print(f"  \u2713 {label}: {n_atoms} atoms -> {target} ({source_desc})")
-        results[label] = {
-            'path': target, 'n_atoms': n_atoms,
-            'source': source_desc, 'status': 'ok',
-        }
-
-    return results
-
-
-# ──────────────────────────────────────────────
-#  Public API – list / save structures
-# ──────────────────────────────────────────────
-
-def _get_local_candidates(element):
-    """Return structure candidates from ELEMENT_PHASE_DATA (no MC3D)."""
-    candidates = []
-    data = ELEMENT_PHASE_DATA.get(element)
-    if data is None:
-        return candidates
-    for phase in data.get('phases', []):
-        st = phase['structure']
-        if st not in SUPPORTED_STRUCTURES:
-            continue
-        a = phase.get('a', '?')
-        lattice_str = f'a={a}' + (f', c={phase["c"]}' if 'c' in phase else '')
-        rt_mark = ' [rt]' if st == data.get('rt_structure') else ''
-        candidates.append({
-            'id': f'{element}-{st.upper()}',
-            'source': 'local',
-            'element': element,
-            'structure_type': st,
-            'natoms_prim': ELEMENT_PRIMITIVE_ATOMS.get(st, 1),
-            'notes': f'{lattice_str}, {phase["T_min"]}-{phase["T_max"]}K{rt_mark}',
-        })
-    return candidates
-
-
-def list_structures(element, sources=('local', 'mc3d'),
-                    mc3d_method='pbesol-v2', mc3d_mode='ambient'):
-    """Discover and display structure candidates for an element.
-
-    Parameters
-    ----------
-    element : str
-    sources : tuple of str
-        ``'local'`` — query ``ELEMENT_PHASE_DATA``.
-        ``'mc3d'``  — query the MC3D REST API.
-    mc3d_method, mc3d_mode : str
-        Forwarded to ``mc3d.get_phases`` (ignored when ``'mc3d'``
-        not in *sources*).
-
-    Returns
-    -------
-    list[dict]
-    """
-    candidates = []
-
-    if 'local' in sources:
-        candidates.extend(_get_local_candidates(element))
-
-    if 'mc3d' in sources:
-        try:
-            from .lazy.mc3d import get_phases
-            phases = get_phases(element, method=mc3d_method, mode=mc3d_mode)
-            for p in phases:
-                e_pa = (f'{p["energy_per_atom"]:.4f} eV/atom'
-                        if p['energy_per_atom'] is not None else '? eV/atom')
-                candidates.append({
-                    'id': p['id'],
-                    'source': 'mc3d',
-                    'element': element,
-                    'structure_uuid': p['structure_uuid'],
-                    'natoms_prim': p['n_atoms_cell'],
-                    'notes': f'SG#{p["sg"]} {p["spg_intl"]}, '
-                             f'{p["phase_type"]}, {e_pa}',
-                })
-        except Exception as e:
-            print(f'  MC3D unavailable: {e}')
-
-    # ── table ──
-    if candidates:
-        print()
-        print(f'─── Structure Candidates: {element} ───')
-        header = (f'  {"#":<4s} {"ID":<16s} {"Source":<6s} '
-                  f'{"Prim":>4s}  Notes')
-        print(header)
-        print(f'  {"─" * 70}')
-        for i, c in enumerate(candidates):
-            st = (c.get('structure_type', '') or
-                  c.get('structure_uuid', '')[:8] or '-')
-            print(f'  {i:<4d} {c["id"]:<16s} {c["source"]:<6s} '
-                  f'{c["natoms_prim"]:4d}  {c["notes"]}')
-        print(f'  {"─" * 70}')
-        print(f'  {len(candidates)} candidate(s).')
-        print()
-    else:
-        print(f'  No candidates found for {element}.')
-
-    return candidates
-
-
-def save_structures(candidates, output_dir, max_atoms=None, supercell=None):
-    """Generate POSCAR files from structure candidates.
-
-    ``max_atoms`` takes priority over ``supercell`` when both are given.
-    File naming: ``{id}-{natoms}.POSCAR``.
-
-    Parameters
-    ----------
-    candidates : list[dict]
-        One or more dicts from ``list_structures()`` or
-        ``_get_local_candidates()``.
-    output_dir : str
-    max_atoms : int or None
-        Target atom count — auto-compute supercell via
-        ``calculate_supercell()``.  Ignored when ``None``.
-    supercell : int or (int, int, int) or None
-        Explicit supercell.  Ignored when *max_atoms* is set.
-
-    Returns
-    -------
-    dict
-        ``{id: path_to_POSCAR}``
-    """
-    os.makedirs(output_dir, exist_ok=True)
-    results = {}
-
-    for c in candidates:
-        if c['source'] == 'local':
-            atoms, _ = _generate_atoms(
-                c['element'], c['structure_type'],
-                supercell=None, target_atoms=1)
-        elif c['source'] == 'mc3d':
-            from .lazy.mc3d import download_atoms
-            atoms = download_atoms(c['structure_uuid'])
-        else:
-            continue
-
-        n_prim = len(atoms)
-        if max_atoms is not None:
-            sc = calculate_supercell(n_prim, max_atoms)
-            atoms = make_supercell(atoms, np.diag(sc))
-        elif supercell is not None:
-            atoms = make_supercell(atoms, _to_supercell_matrix(supercell))
-
-        filename = f"{c['id']}-{len(atoms)}.POSCAR"
-        path = os.path.join(output_dir, filename)
-        write(path, atoms, format='vasp', direct=True)
-        results[c['id']] = path
-        print(f'  {filename}')
-
-    return results
-
-
-# ──────────────────────────────────────────────
-#  Legacy batch helpers (unchanged)
-# ──────────────────────────────────────────────
-
-def batch_generate_structures(elements, output_dir="structures",
-                              target_atoms=100, structure_type=None):
-    """Generate POSCAR files for multiple elements."""
-    results = {}
-    for element in elements:
-        try:
-            atoms, poscar_path = generate_element_structure(
-                element, output_dir, target_atoms,
-                structure_type=structure_type, verbose=True
-            )
-            results[element] = {
-                'atoms': atoms, 'path': poscar_path, 'n_atoms': len(atoms)
-            }
-        except Exception as e:
-            print(f"Error generating structure for {element}: {e}")
-            results[element] = None
-    return results
-
-
-def generate_all_typical_elements(output_dir="structures", target_atoms=100):
-    """Generate POSCAR files for all typical metallic elements."""
-    results = {}
-    total_count = 0
-    success_count = 0
-
-    elements_to_generate = {}
-    for sym, data in ELEMENT_PHASE_DATA.items():
-        rt = data.get('rt_structure')
-        if rt and rt in ('fcc', 'bcc', 'hcp', 'diamond', 'sc', 'bct', 'dhcp'):
-            if rt not in elements_to_generate:
-                elements_to_generate[rt] = []
-            elements_to_generate[rt].append(sym)
-
-    print(
-        f"Generating POSCAR files for typical metallic elements "
-        f"(target: {target_atoms} atoms)..."
-    )
-    print("=" * 70)
-
-    for struct_type, elements_list in elements_to_generate.items():
-        print(f"\n{struct_type.upper()} structures:")
-        for element in elements_list:
-            total_count += 1
-            try:
-                atoms, poscar_path = generate_element_structure(
-                    element, output_dir=output_dir,
-                    target_atoms=target_atoms,
-                    structure_type=struct_type, verbose=True
-                )
-                results[element] = {
-                    'structure': struct_type,
-                    'atoms': atoms, 'path': poscar_path,
-                    'n_atoms': len(atoms),
-                }
-                success_count += 1
-            except Exception as e:
-                print(f"  ERROR: Failed to generate {element} ({struct_type}): {e}")
-                results[element] = None
-
-    print("\n" + "=" * 70)
-    print(f"Generation complete: {success_count}/{total_count} successful")
-    print(f"Output directory: {output_dir}")

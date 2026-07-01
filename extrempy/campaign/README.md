@@ -81,7 +81,7 @@ from extrempy import ElementEOSCalculator
 
 calc = ElementEOSCalculator('Al',
     work_root    = '/share/zeng/metals/dpmd',
-    dpgen_dir    = '/share/zeng/metals/sample',       # 自动搜 model + POSCAR
+    dpgen_dir    = '/share/zeng/metals/sample/Al/dpgen',  # element-internal
     machine_template = '~/template/dpgen-machine.json',
     partition    = 'gpu_share',                       # slurm 分区
     nodes        = 1,                                 # 覆盖 machine_template
@@ -124,7 +124,7 @@ calc = ElementEOSCalculator('Al',
 ```python
 calc = ElementEOSCalculator('Al',
     work_root = '/share/zeng/metals/dpmd',
-    dpgen_dir = '/share/zeng/metals/sample',            # 从这里找 DP 模型
+    dpgen_dir = '/share/zeng/metals/sample/Al/dpgen',   # element-internal
     poscar_dir = '/share/zeng/metals/poscar',            # 从这里找 POSCAR
     machine_template = '~/template/dpgen-machine.json',
 )
@@ -169,8 +169,8 @@ plot_thermo_summary(summary, 'Al')
 | 方法 | 默认行为 |
 |---|---|
 | `_get_tm()` → float | 从 `ELEMENT_PHASE_DATA` 查熔点 |
-| `_find_pot()` → str | `dp_model_path > dpgen_dir/{el}_sample/iter.*/00.train/000/` |
-| `_find_poscar(idx=0)` → str | `poscar_path > poscar_dir/{el}-*POSCAR > dpgen_dir/{el}/confs/*.POSCAR` |
+| `_find_pot()` → str | `dp_model_path > dpgen_dir/frozen_model*.pb symlink > dpgen_dir/iter.*/00.train/000/` |
+| `_find_poscar(role)` → str | solid_rt: `poscar_path > poscar_dir/{el}-{rt}.POSCAR > dpgen_dir/../confs/ > ASE auto-gen`; liquid: 同前按 `-LIQ` label，找不到静默回退 solid_rt |
 | `_get_two_phase_temps()` → list | `Tm + [-ΔT+shift, 0+shift, ΔT+shift]` |
 | `_get_npt_temps()` → list | `Tm + [-(n//2)..(n//2)]*dT + shift` |
 
@@ -183,7 +183,7 @@ plot_thermo_summary(summary, 'Al')
 ```python
 results = run_eos_all(['Al', 'Cu', 'Au'],
     work_root='/share/zeng/metals/dpmd',
-    dpgen_dir='/share/zeng/metals/sample',
+    dpgen_dir='/share/zeng/metals/sample',  # outer; each element → {work}/{el}/dpgen
     machine_template='~/template/dpgen-machine.json')
 # → {'Al': 'generated', 'Cu': 'generated', 'Au': 'generated'}
 ```
@@ -196,12 +196,15 @@ results = run_eos_all(['Al', 'Cu', 'Au'],
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
-| `dpgen_dir` | None | DPGEN 项目根目录。自动搜 model + POSCAR |
+| `dpgen_dir` | None | Element-internal DPGEN 目录，即 `{work_root}/{element}/dpgen`（与 `DPBuilder.dpgen_dir` 一致） |
 | `dp_model_path` | None | 显式 DP frozen_model 路径（跳过搜索） |
 | `poscar_path` | None | 显式 POSCAR 路径（跳过搜索） |
-| `poscar_dir` | None | POSCAR 目录，glob `{element}-*POSCAR` |
+| `poscar_dir` | None | POSCAR 目录，按 `{element}-FCC.POSCAR` / `{element}-LIQ.POSCAR` 等 label 精确匹配 |
 
-搜索优先级：`dp_model_path > dpgen_dir`，`poscar_path > poscar_dir > dpgen_dir/confs`
+搜索优先级：
+- **model**: `dp_model_path` > `dpgen_dir/{frozen_model.pb, frozen_model_compressed.pb}` symlink > `dpgen_dir/iter.*/00.train/000/`
+- **POSCAR** (`role='solid_rt'`): `poscar_path` > `poscar_dir/{element}-{rt_structure}.POSCAR` > `dpgen_dir/../confs/` > ASE 自动生成
+- **POSCAR** (`role='liquid'`): `poscar_dir/{element}-LIQ.POSCAR` > `dpgen_dir/../confs/{element}-LIQ.POSCAR` > 静默回退到 `solid_rt`
 
 ### Slurm 提交
 

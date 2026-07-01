@@ -46,16 +46,20 @@ class EOSCalculator:
     work_root : str
         Root directory for all element data.
     dpgen_dir : str or None
-        DPGEN project root.  Auto-discovers DP model from
-        ``{dpgen_dir}/{element}/dpgen/iter.*/00.train/000/`` and POSCAR
-        from ``{dpgen_dir}/{element}/confs/*.POSCAR``.
+        Element-internal DPGEN directory, i.e.
+        ``{work_root}/{element}/dpgen`` (consistent with
+        :class:`DPBuilder.dpgen_dir`).  Auto-discovers DP model via
+        the ``collect_dpgen`` symlink at the root, then
+        ``iter.*/00.train/000/``; and POSCAR from the sibling
+        ``confs/`` directory (``{work_root}/{element}/confs/``).
     dp_model_path : str or None
         Explicit path to ``frozen_model.pb``.  Overrides all other search.
     poscar_path : str or None
         Explicit path to a POSCAR file.  Overrides all other search.
     poscar_dir : str or None
         Directory to glob ``{element}-*POSCAR``.  Falls back to
-        ``dpgen_dir/{element}/confs/`` if not set.
+        ``{dpgen_dir}/../confs/`` (i.e. ``{work_root}/{element}/confs/``)
+        if not set.
     machine_template : str or None
         dpgen-style ``machine.json`` — primary source for slurm resources
         (partition, nodes, ``source_list`` for env setup, etc.).
@@ -131,7 +135,11 @@ class EOSCalculator:
 
         Priority:
           1. ``self.dp_model_path`` (explicit)
-          2. ``self.dpgen_dir`` → auto-detect DPGEN output
+          2. ``self.dpgen_dir`` (element-internal DPGEN dir, i.e.
+             ``{work_root}/{element}/dpgen`` — consistent with
+             :class:`DPBuilder.dpgen_dir`) → look for the
+             ``collect_dpgen`` symlink at the root, then glob
+             ``iter.*/00.train/000/``.
         """
         if self.dp_model_path:
             if not os.path.exists(self.dp_model_path):
@@ -140,12 +148,16 @@ class EOSCalculator:
             return self.dp_model_path
 
         if self.dpgen_dir:
+            # 1. collect_dpgen symlink at dpgen_dir root
             for name in ['frozen_model_compressed.pb', 'frozen_model.pb']:
-                pat = os.path.join(
-                    self.dpgen_dir,
-                    f'{self.element}/dpgen/iter.*/00.train/000/',
-                    name)
-                files = sorted(glob.glob(pat))
+                p = os.path.join(self.dpgen_dir, name)
+                if os.path.exists(p):
+                    return p
+            # 2. glob iter.*/00.train/000/
+            for name in ['frozen_model_compressed.pb', 'frozen_model.pb']:
+                files = sorted(glob.glob(
+                    os.path.join(self.dpgen_dir,
+                                 'iter.*/00.train/000', name)))
                 if files:
                     return files[-1]
 
@@ -153,42 +165,80 @@ class EOSCalculator:
             f'No DP model found for {self.element}. '
             'Set dp_model_path or dpgen_dir.')
 
-    def _find_poscar(self, idx=0):
-        """Return path to a POSCAR file.
+    def _find_poscar(self, role='solid_rt'):
+        """Return path to a POSCAR file by role.
 
-        Priority:
-          1. ``self.poscar_path`` (explicit file)
-          2. ``self.poscar_dir`` → glob ``{element}-*POSCAR``
-          3. ``self.dpgen_dir`` → glob ``{dpgen_dir}/{element}/confs/*.POSCAR``
-          4. auto-generate from ``ELEMENT_PHASE_DATA`` (primitive cell)
+        Parameters
+        ----------
+        role : {'solid_rt', 'liquid'}
+            ``solid_rt`` — room-temperature solid phase, looked up by
+            ``ELEMENT_PHASE_DATA[element]['rt_structure']`` (e.g.
+            ``Al-FCC.POSCAR``).
+            ``liquid`` — looked up by ``{element}-LIQ.POSCAR``; if not
+            found, silently falls back to the solid_rt POSCAR.
+
+        Search order:
+          1. ``self.poscar_path`` (only for ``solid_rt``)
+          2. ``self.poscar_dir`` / sibling ``confs/`` of ``dpgen_dir``
+             → match by explicit label
+          3. solid_rt only: ASE auto-generation via :func:`resolve_poscar`
         """
-        if self.poscar_path:
+        if role == 'solid_rt' and self.poscar_path:
             return self.poscar_path
 
+        label = self._label_for_role(role)
+        p = self._lookup_by_label(label)
+        if p:
+            return p
+
+        if role == 'solid_rt':
+            return self._autogen_solid(label)
+
+        # role == 'liquid': silent fallback to solid_rt (no recursion —
+        # _autogen_solid never calls back into 'liquid').
+        return self._find_poscar('solid_rt')
+
+    def _label_for_role(self, role):
+        """Return the expected POSCAR label for a role."""
+        if role == 'liquid':
+            return f'{self.element}-LIQ'
+        rt = ELEMENT_PHASE_DATA.get(self.element, {}).get('rt_structure')
+        return f'{self.element}-{rt.upper()}' if rt else None
+
+    def _search_dirs(self):
+        """Directories to look for ``{label}.POSCAR``."""
+        dirs = []
         if self.poscar_dir:
-            pat = os.path.join(self.poscar_dir, f'{self.element}-*POSCAR')
-            files = sorted(glob.glob(pat))
-            if files:
-                return files[idx]
-
+            dirs.append(self.poscar_dir)
         if self.dpgen_dir:
-            pat = os.path.join(self.dpgen_dir, self.element, 'confs', '*.POSCAR')
-            files = sorted(glob.glob(pat))
-            if files:
-                return files[idx]
+            # dpgen_dir is the element-internal dir; confs/ is its sibling.
+            dirs.append(os.path.join(os.path.dirname(self.dpgen_dir), 'confs'))
+        return dirs
 
-        # 4th priority: auto-generate from local ELEMENT_PHASE_DATA
-        from extrempy.structure import _get_local_candidates, save_structures
-        cands = _get_local_candidates(self.element)
-        if cands:
-            out_dir = os.path.join(self._element_dir, 'confs')
-            saved = save_structures(
-                cands[:1], out_dir, supercell=(1, 1, 1))
-            return next(iter(saved.values()))
+    def _lookup_by_label(self, label):
+        """Find ``{label}.POSCAR`` in the search dirs; return path or None."""
+        if not label:
+            return None
+        for d in self._search_dirs():
+            p = os.path.join(d, f'{label}.POSCAR')
+            if os.path.exists(p):
+                return p
+        return None
 
-        raise FileNotFoundError(
-            f'No POSCAR found for {self.element}. '
-            'Set poscar_path, poscar_dir, or dpgen_dir.')
+    def _autogen_solid(self, label):
+        """solid_rt fallback: ASE-generate the RT-stable phase POSCAR."""
+        from extrempy.structure import resolve_poscar, ase_source
+        rt = ELEMENT_PHASE_DATA.get(self.element, {}).get('rt_structure')
+        if not rt:
+            raise FileNotFoundError(
+                f'No POSCAR found for {self.element} (role=solid_rt). '
+                'Set poscar_path, poscar_dir, or dpgen_dir.')
+        out_dir = os.path.join(self._element_dir, 'confs')
+        return resolve_poscar(
+            self.element, label,
+            confs_dir=out_dir,
+            source=ase_source(self.element, structure_type=rt),
+            verbose=False)
 
     def _get_natoms(self, poscar_path, nx, ny, nz):
         atoms = ase.io.read(poscar_path, format='vasp')
@@ -368,7 +418,7 @@ class EOSCalculator:
         print(f'[{self.element}] Melting point (Tm) : {Tm} K')
         print(f'[{self.element}] Two-phase temps   : {temps}')
 
-        poscar = self._find_poscar()
+        poscar = self._find_poscar('solid_rt')
         pot = self._find_pot()
 
         _nx, _ny, _nz = supercell
@@ -459,12 +509,9 @@ class EOSCalculator:
         temps = latt_temp_list if latt_temp_list is not None \
             else self._get_npt_temps(npt_n, npt_dT, npt_shift)
         print(f'[{self.element}] NPT temperature series : {temps}')
-        poscar = self._find_poscar(
-            -1 if 'liquid' in phases and len(phases) > 1 else 0)
         pot = self._find_pot()
 
         _nx, _ny, _nz = supercell
-        self._get_natoms(poscar, _nx, _ny, _nz)
 
         base = self._base_params(dt=dt, pressure=pressure)
         base.update(
@@ -474,6 +521,10 @@ class EOSCalculator:
 
         self._npt_gens = []
         for phase in phases:
+            poscar = (self._find_poscar('liquid') if phase == 'liquid'
+                      else self._find_poscar('solid_rt'))
+            # Print atom counts once per phase (per-phase POSCAR may differ).
+            self._get_natoms(poscar, _nx, _ny, _nz)
             if output_internal:
                 template = ('npt-entropy-liquid.j2' if phase == 'liquid'
                             else 'npt-entropy-solid.j2')
@@ -545,12 +596,9 @@ class EOSCalculator:
         """Generate NVT trajectory LAMMPS inputs."""
         Tm = int(self._get_tm())
         print(f'[{self.element}] NVT temperature         : {Tm} K')
-        poscar = self._find_poscar(
-            -1 if 'liquid' in phases and len(phases) > 1 else 0)
         pot = self._find_pot()
 
         _nx, _ny, _nz = supercell
-        self._get_natoms(poscar, _nx, _ny, _nz)
 
         base = self._base_params(dt=dt, pressure=pressure)
         base.update(
@@ -561,6 +609,10 @@ class EOSCalculator:
 
         self._traj_gens = []
         for phase in phases:
+            poscar = (self._find_poscar('liquid') if phase == 'liquid'
+                      else self._find_poscar('solid_rt'))
+            # Print atom counts once per phase (per-phase POSCAR may differ).
+            self._get_natoms(poscar, _nx, _ny, _nz)
             template = ('nvt-liquid-traj.j2' if phase == 'liquid'
                         else 'nvt-solid-traj.j2')
             work_dir = os.path.join(self.traj_dir, f'{Tm}k_{phase}')

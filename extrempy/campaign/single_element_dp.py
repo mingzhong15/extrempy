@@ -589,88 +589,37 @@ class ElementDPBuilder(DPBuilder):
         return segs
 
     def generate_poscars(self, segs):
-        from extrempy.structure import (generate_element_structure,
-                                         calculate_supercell)
-        from ase.io import write
-        from ase.build import make_supercell
+        from extrempy.structure import (resolve_poscar, ase_source,
+                                        mc3d_source)
 
-        DEFAULT_SUPERCELL = {
-            'fcc': (2, 2, 2),
-            'bcc': (3, 3, 3),
-            'hcp': (3, 3, 4),
-            'diamond': (2, 2, 2),
-            'dhcp': (3, 3, 2),
-            'sc': (3, 3, 3),
-            'bct': (3, 3, 3),
-        }
         self._ensure_dirs()
-        self._segs = segs
-
-        # ── Pre-fetch MC3D UUID map if in MC3D mode ──
-        mc3d_map = {}
-        if self.mc3d_mode is not None:
-            from extrempy.lazy.mc3d import get_phases
-            mc3d_map = {
-                p["id"]: p["structure_uuid"]
-                for p in get_phases(self.element,
-                                    method=self.mc3d_method,
-                                    mode=self.mc3d_mode)
-            }
-
         print("-- POSCAR --")
-        solid_poscar_path = None
+
         for seg in segs:
             label = seg['label']
             st = seg['structure']
-            out_path = os.path.join(self.confs_dir, label + '.POSCAR')
-            if label.endswith('-LIQ'):
-                print(f"  - {label}: from AIMD CONTCAR (placeholder)")
-                continue
-            if os.path.exists(out_path):
-                print(f"  - {label}: POSCAR exists")
-                solid_poscar_path = out_path
-                continue
 
-            # ── ASE generation (legacy) ──
+            # Build the source for this seg.
             if st in SUPPORTED_STRUCTURES:
-                sc = DEFAULT_SUPERCELL.get(st, (3, 3, 3))
-                atoms, _ = generate_element_structure(
-                    element=self.element,
-                    output_dir=self.confs_dir,
-                    supercell=sc,
-                    structure_type=st,
-                    verbose=False)
-                generated = glob.glob(os.path.join(
-                    self.confs_dir, self.element + '-' + st.upper() + '*.POSCAR'))
-                if generated and os.path.basename(generated[0]) != label + '.POSCAR':
-                    os.rename(generated[0], out_path)
-                print(f"  \u2713 {os.path.basename(out_path)} ({len(atoms)} atoms)")
-
-            # ── MC3D download ──
-            elif st == "mc3d":
-                from extrempy.lazy.mc3d import download_atoms
-                uid = seg.get("structure_uuid")
-                if not uid:
-                    uid = mc3d_map.get(seg.get("mc3d_id"))
+                src = ase_source(self.element, structure_type=st,
+                                 supercell=self.supercell)
+            elif st == 'mc3d':
+                uid = seg.get('structure_uuid')
                 if not uid:
                     raise ValueError(
-                        f"No structure_uuid for {label} "
-                        f"(mc3d_id={seg.get('mc3d_id')})")
-                atoms = download_atoms(uid, method=self.mc3d_method)
-                sc = calculate_supercell(len(atoms),
-                                         target_atoms=self.target_atoms)
-                atoms = make_supercell(atoms, np.diag(sc))
-                write(out_path, atoms, format="vasp", direct=True)
-                print(f"  \u2713 {os.path.basename(out_path)} "
-                      f"({len(atoms)} atoms, "
-                      f"sc={sc[0]}x{sc[1]}x{sc[2]}, from MC3D)")
-
+                        f"No structure_uuid in seg for {label} "
+                        f"(make_phase_segments should populate it)")
+                src = mc3d_source(uid,
+                                  target_atoms=self.target_atoms,
+                                  method=self.mc3d_method)
             else:
                 raise FileNotFoundError(
                     f"Structure type '{st}' not supported for {label}.\n"
                     f"  Use mc3d_mode='ambient' to fetch from MC3D.")
 
-            solid_poscar_path = out_path
+            resolve_poscar(self.element, label,
+                           confs_dir=self.confs_dir,
+                           source=src)
 
 
 def build_all_elements(work_root, elements=None, **kwargs):
