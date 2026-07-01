@@ -251,5 +251,284 @@ class TestSysConfigsOrdering(unittest.TestCase):
         self.assertTrue(sys_configs_fe[2][0].endswith('Fe-BCC-2.POSCAR'))
 
 
+# ---- Helper to build synthetic chunk.profile for EOS tests -------------
+
+def _write_chunk_profile(path, verdict_type, n_blocks=20):
+    """Write a synthetic chunk.profile producing the given verdict.
+
+    verdict_type: 'solid' | 'liquid' | 'coexist'
+    """
+    if verdict_type == 'solid':
+        q4_lo, q4_hi = 0.18, 0.19
+        q6_lo, q6_hi = 0.50, 0.50
+        rho_lo, rho_hi = 2.70, 2.70
+    elif verdict_type == 'liquid':
+        q4_lo, q4_hi = 0.02, 0.01
+        q6_lo, q6_hi = 0.01, 0.01
+        rho_lo, rho_hi = 2.50, 2.50
+    else:  # coexist
+        q4_lo, q4_hi = 0.18, 0.02
+        q6_lo, q6_hi = 0.50, 0.01
+        rho_lo, rho_hi = 2.70, 2.50
+
+    header = '# Chunk Coord1 Ncount density/mass temp v_virial_atom c_Q[1] c_Q[2]'
+    with open(path, 'w') as f:
+        for blk in range(n_blocks):
+            ts = 1000 * (blk + 1)
+            f.write(f'{ts}\n')
+            f.write(header + '\n')
+            for i in range(10):
+                half = i // 5
+                q4 = q4_lo if half == 0 else q4_hi
+                q6 = q6_lo if half == 0 else q6_hi
+                rho = rho_lo if half == 0 else rho_hi
+                coord = 0.05 + 0.1 * i
+                f.write(f'{i+1} {coord:.4f} 100 {rho:.4f} 300.0 0.0 {q4:.4f} {q6:.4f}\n')
+
+
+_REAL_NUMPY = None  # cached real numpy module (loaded once; C ext can't reload)
+
+
+def _restore_real_numpy():
+    """Replace the mocked numpy with the real one and reload modules
+    that captured the mock at import time (melt.py, chunk.py).
+
+    Returns a dict to pass to ``_restore_mocked_numpy`` in tearDown.
+    The real numpy is cached at module level because numpy's C extension
+    cannot be reloaded more than once per process.
+
+    NB: the submodule-injection loop below is conservative — it only
+    registers submodules that already exist as attributes on the cached
+    numpy module object.  This covers melt.py's current usage
+    (``np.arange / np.median / np.mean``).  If a future change needs
+    ``np.linalg.*`` or other lazily-imported submodules, add an explicit
+    ``import numpy.linalg`` here to ensure it is registered.
+    """
+    global _REAL_NUMPY
+    import importlib
+    saved = {}
+    for mod in list(sys.modules):
+        if mod == 'numpy' or mod.startswith('numpy.'):
+            saved[mod] = sys.modules.pop(mod)
+    if _REAL_NUMPY is None:
+        _REAL_NUMPY = importlib.import_module('numpy')
+    # Inject the cached real numpy (and its submodules) into sys.modules.
+    sys.modules['numpy'] = _REAL_NUMPY
+    for name in dir(_REAL_NUMPY):
+        sub = getattr(_REAL_NUMPY, name, None)
+        if isinstance(sub, type(_REAL_NUMPY)):
+            sys.modules[f'numpy.{name}'] = sub
+    # Force reload of melt (captured mock np) and chunk (same).
+    for mod_name in ('extrempy.campaign.chunk', 'extrempy.campaign.melt'):
+        if mod_name in sys.modules:
+            importlib.reload(sys.modules[mod_name])
+    return saved
+
+
+def _restore_mocked_numpy(saved):
+    sys.modules.update(saved)
+
+
+class TestEOSAnalyzer(unittest.TestCase):
+    """Test analyze_two_phase with synthetic chunk.profile + Tm_refined.
+
+    Note: analyze_two_phase / _get_npt_temps use numpy for real, so we
+    restore the real numpy module (test_helpers.setup_mocks mocks it).
+    """
+
+    def setUp(self):
+        self._np_saved = _restore_real_numpy()
+        self.tmpdir = tempfile.mkdtemp()
+        from extrempy.campaign.melt import ElementEOSCalculator
+        # Al Tm=933; create 3 candidate-T dirs: 1133k(solid),1233k(coexist),1333k(liquid)
+        self.temps = [1133, 1233, 1333]
+        self.verdicts = ['solid', 'coexist', 'liquid']
+        for T, v in zip(self.temps, self.verdicts):
+            d = os.path.join(self.tmpdir, 'Al', 'melt', f'{T}k')
+            os.makedirs(d)
+            _write_chunk_profile(os.path.join(d, 'chunk.profile'), v)
+        # Build calc with fake gens
+        self.calc = ElementEOSCalculator('Al', work_root=self.tmpdir, dpgen_dir=None)
+        self.calc._two_phase_gens = []
+        for T in self.temps:
+            gen = MagicMock()
+            gen.params = {'Tm_estimate': T}
+            gen.work_path = os.path.join(self.tmpdir, 'Al', 'melt', f'{T}k')
+            self.calc._two_phase_gens.append(gen)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+        _restore_mocked_numpy(self._np_saved)
+
+    def test_coexist_detection(self):
+        result = self.calc.analyze_two_phase()
+        self.assertEqual(result['coexist_temps'], [1233])
+        self.assertEqual(result['Tm_interval'], (1233, 1233))
+        self.assertEqual(result['Tm_refined'], 1233)
+        self.assertEqual(self.calc.Tm_refined, 1233)
+
+    def test_no_coexist(self):
+        # Make all temps solid → no coexist
+        for T in self.temps:
+            d = os.path.join(self.tmpdir, 'Al', 'melt', f'{T}k')
+            _write_chunk_profile(os.path.join(d, 'chunk.profile'), 'solid')
+        result = self.calc.analyze_two_phase()
+        self.assertEqual(result['coexist_temps'], [])
+        self.assertIsNone(result['Tm_interval'])
+        self.assertIsNone(result['Tm_refined'])
+
+    def test_submit_without_generate(self):
+        # BUG-5: submit_two_phase without generate should not raise AttributeError
+        from extrempy.campaign.melt import ElementEOSCalculator
+        calc = ElementEOSCalculator('Al', work_root=self.tmpdir, dpgen_dir=None)
+        calc.submit_two_phase(submit=False)  # no-op, no crash
+        calc.submit_npt(submit=False)
+        calc.submit_nvt_traj(submit=False)
+
+    def test_tm_refined_used_by_npt(self):
+        # Set Tm_refined; _get_npt_temps should center on it
+        from extrempy.campaign.melt import ElementEOSCalculator
+        calc = ElementEOSCalculator('Al', work_root=self.tmpdir, dpgen_dir=None)
+        calc.Tm_refined = 1100
+        temps = calc._get_npt_temps(npt_n=5, npt_dT=100, npt_shift=0)
+        # 1100 + [-200,-100,0,100,200] = [900,1000,1100,1200,1300]
+        self.assertEqual(temps, [900, 1000, 1100, 1200, 1300])
+
+
+class TestSbatchGeneration(unittest.TestCase):
+    """Test _write_sbatch: cpus-per-task, needs_traj_dir."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_calc(self):
+        from extrempy.campaign.melt import ElementEOSCalculator
+        return ElementEOSCalculator('Al', work_root=self.tmpdir, dpgen_dir=None)
+
+    def test_cpus_per_task_appended(self):
+        calc = self._make_calc()
+        cfg = calc._resolve_slurm_config()
+        cfg['cores_per_node'] = 40
+        cfg['ntasks_per_node'] = 20
+        path = calc._write_sbatch(cfg, 'testjob', self.tmpdir, needs_traj_dir=False)
+        with open(path) as f:
+            content = f.read()
+        self.assertIn('#SBATCH --cpus-per-task=2', content)
+        self.assertIn('export OMP_NUM_THREADS=2', content)
+
+    def test_no_mkdir_traj_for_npt(self):
+        calc = self._make_calc()
+        cfg = calc._resolve_slurm_config()
+        path = calc._write_sbatch(cfg, 'Al_933k_npt_solid', self.tmpdir,
+                                  needs_traj_dir=False)
+        with open(path) as f:
+            content = f.read()
+        self.assertNotIn('mkdir -p traj', content)
+
+    def test_mkdir_traj_for_nvt(self):
+        calc = self._make_calc()
+        cfg = calc._resolve_slurm_config()
+        path = calc._write_sbatch(cfg, 'Al_933k_nvt_solid', self.tmpdir,
+                                  needs_traj_dir=True)
+        with open(path) as f:
+            content = f.read()
+        self.assertIn('mkdir -p traj', content)
+
+    def test_machine_template_command_used(self):
+        # D-6: machine_template command should now be respected
+        from extrempy.campaign.melt import ElementEOSCalculator
+        # Create a minimal machine.json
+        mj_path = os.path.join(self.tmpdir, 'machine.json')
+        with open(mj_path, 'w') as f:
+            json.dump({
+                'model_devi': {
+                    'command': '/usr/local/bin/lmp_custom -in run.in',
+                    'resources': {'number_node': 2, 'cpu_per_node': 32}
+                }
+            }, f)
+        calc = ElementEOSCalculator('Al', work_root=self.tmpdir, dpgen_dir=None,
+                                    machine_template=mj_path)
+        cfg = calc._resolve_slurm_config()
+        self.assertEqual(cfg['command'], '/usr/local/bin/lmp_custom -in run.in')
+        self.assertEqual(cfg['nodes'], 2)
+
+
+class TestNptShiftDefault(unittest.TestCase):
+    def test_npt_shift_zero(self):
+        saved = _restore_real_numpy()
+        try:
+            from extrempy.campaign.melt import ElementEOSCalculator
+            tmpdir = tempfile.mkdtemp()
+            try:
+                calc = ElementEOSCalculator('Al', work_root=tmpdir, dpgen_dir=None)
+                # Al Tm=933: [733,833,933,1033,1133]
+                temps = calc._get_npt_temps()
+                self.assertEqual(temps, [733, 833, 933, 1033, 1133])
+            finally:
+                shutil.rmtree(tmpdir)
+        finally:
+            _restore_mocked_numpy(saved)
+
+
+class TestRunAllSplit(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_calc_with_mocks(self):
+        from extrempy.campaign.melt import ElementEOSCalculator
+        calc = ElementEOSCalculator('Al', work_root=self.tmpdir, dpgen_dir=None)
+        calc.generate_two_phase = MagicMock()
+        calc.submit_two_phase = MagicMock()
+        calc.generate_npt = MagicMock()
+        calc.submit_npt = MagicMock()
+        calc.generate_nvt_traj = MagicMock()
+        calc.submit_nvt_traj = MagicMock()
+        return calc
+
+    def test_run_two_phase_only(self):
+        calc = self._make_calc_with_mocks()
+        calc.run_two_phase(submit=False)
+        calc.generate_two_phase.assert_called_once()
+        calc.submit_two_phase.assert_called_once_with(submit=False)
+        calc.generate_npt.assert_not_called()
+
+    def test_run_property_scans_only(self):
+        calc = self._make_calc_with_mocks()
+        calc.run_property_scans(submit=False)
+        calc.generate_npt.assert_called_once()
+        calc.submit_npt.assert_called_once_with(submit=False)
+        calc.generate_nvt_traj.assert_called_once()
+        calc.generate_two_phase.assert_not_called()
+
+    def test_run_all_equals_both(self):
+        calc = self._make_calc_with_mocks()
+        calc.run_all(submit=False)
+        calc.generate_two_phase.assert_called_once()
+        calc.generate_npt.assert_called_once()
+        calc.generate_nvt_traj.assert_called_once()
+
+
+class TestEOSAbstract(unittest.TestCase):
+    def test_base_class_not_instantiable(self):
+        from extrempy.campaign.melt import EOSCalculator
+        with self.assertRaises(TypeError):
+            EOSCalculator(work_root='/tmp')
+
+    def test_subclass_works(self):
+        from extrempy.campaign.melt import ElementEOSCalculator
+        tmpdir = tempfile.mkdtemp()
+        try:
+            calc = ElementEOSCalculator('Al', work_root=tmpdir, dpgen_dir=None)
+            self.assertEqual(calc.element, 'Al')
+        finally:
+            shutil.rmtree(tmpdir)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -162,7 +162,18 @@ plot_thermo_summary(summary, 'Al')
 | `analyze_npt()` → DataFrame | 遍历 NPT 目录 → 读取 thermo.dat → MSD 相判定 → 汇总 |
 | `generate_nvt_traj(phases=('solid','liquid'))` | 生成 NVT 轨迹输入 |
 | `submit_nvt_traj(submit=True)` | 提交 NVT 轨迹任务 |
-| `run_all(submit=True)` | 按顺序执行上述所有 generate + submit |
+| `run_two_phase(submit=True)` | 仅 Phase 1：generate + submit two-phase |
+| `run_property_scans(submit=True)` | 仅 Phase 2+3：generate + submit NPT + NVT（用 `Tm_refined` 如有） |
+| `run_all(submit=True)` | 便捷：two-phase + property scans（**用估算 Tm**，不含 analyze） |
+
+> **两步工作流**（推荐，用精修 Tm）：
+> ```python
+> calc.run_two_phase(submit=True)
+> # ... 等 job 跑完 ...
+> calc.analyze_two_phase()            # 设置 calc.Tm_refined
+> calc.run_property_scans(submit=True)  # NPT/NVT 围绕精修 Tm
+> ```
+> `run_all()` 仍可用，但用估算 Tm，不包含两相法精修。
 
 ### Hooks（可被子类覆盖）
 
@@ -172,7 +183,7 @@ plot_thermo_summary(summary, 'Al')
 | `_find_pot()` → str | `dp_model_path > dpgen_dir/frozen_model*.pb symlink > dpgen_dir/iter.*/00.train/000/` |
 | `_find_poscar(role)` → str | solid_rt: `poscar_path > poscar_dir/{el}-{rt}.POSCAR > dpgen_dir/../confs/ > ASE auto-gen`; liquid: 同前按 `-LIQ` label，找不到静默回退 solid_rt |
 | `_get_two_phase_temps()` → list | `Tm + [-ΔT+shift, 0+shift, ΔT+shift]` |
-| `_get_npt_temps()` → list | `Tm + [-(n//2)..(n//2)]*dT + shift` |
+| `_get_npt_temps()` → list | `Tm + [-(n//2)..(n//2)]*dT + shift`（默认 shift=0，以 Tm 为中心） |
 
 ### `ElementEOSCalculator(element, **kwargs)`
 
@@ -231,7 +242,7 @@ results = run_eos_all(['Al', 'Cu', 'Au'],
 | `two_phase_nz` | 10 | 双相法 z 方向复制数 |
 | `npt_n` | 5 | NPT 温度点数 |
 | `npt_dT` | 100 | NPT 温度间隔 (K) |
-| `npt_shift` | -600 | NPT 相对 Tm 的整体偏移 (K) |
+| `npt_shift` | 0 | NPT 相对 Tm 的整体偏移 (K)；默认 0 即以 Tm 为中心 |
 | `supercell` | (5,5,5) | 晶胞复制数 |
 | `liquid_superheat` | 1.9 | 液相过热倍数 (`T_high = Tm × liquid_superheat`) |
 | `equil_steps` | 100000 | 平衡步数 |
@@ -243,7 +254,7 @@ results = run_eos_all(['Al', 'Cu', 'Au'],
 
 > **关于温度计算示例**（以 Al 为例，Tm = 933 K）：
 > - Two-phase 温度: `[933-100+300, 933+0+300, 933+100+300]` = [1133, 1233, 1333] K
-> - NPT 温度: `933 + [-200, -100, 0, 100, 200] - 600` = 过滤 ≥250 → [333, 433, 533] K
+> - NPT 温度: `933 + [-200, -100, 0, 100, 200]` = [733, 833, 933, 1033, 1133] K（跨越 Tm）
 
 ---
 
@@ -285,11 +296,17 @@ results = run_eos_all(['Al', 'Cu', 'Au'],
 
 ```python
 result = calc.analyze_two_phase()
-# {'results': {1133: 'solid', 1233: 'partial', 1333: 'liquid'},
-#  'Tm_interval': (1233, 1333)}
+# {'results': {1133: 'solid', 1233: 'coexist', 1333: 'liquid'},
+#  'coexist_temps': [1233],
+#  'Tm_interval': (1233, 1233),
+#  'Tm_refined': 1233,
+#  'details': {1133: {...}, 1233: {...}, 1333: {...}}}
 ```
 
-内部使用 Q4/Q6 序参量判断每个 dump 的相（阈值：Q4 > 0.1 & Q6 > 0.3 → 固体）。
+读取 `chunk.profile`（按 z 分层的 Q4/Q6/密度）比较上下半盒判定 `solid` /
+`liquid` / `coexist`；可选地用 `rdf_top.txt` 交叉验证并标注 `confidence`。
+`Tm_refined`（coexist 温度的中位数）会写回 `calc.Tm_refined`，供后续
+`run_property_scans()` 自动使用。
 
 ### NPT 热力学分析
 
@@ -305,12 +322,14 @@ from extrempy.md.traj import read_rdf_file
 r, g_r = read_rdf_file('rdf.txt')
 ```
 
-### 批量双相法分析（已有 dump 结果时）
+### 批量双相法分析（旧 dump 路径，已弃用）
 
 ```python
-from extrempy.md.traj import batch_analyze_two_phase
+from extrempy.md.traj import batch_analyze_two_phase  # deprecated
 results = batch_analyze_two_phase('/path/to/dump/parent/dir')
 ```
+
+新代码请用 `extrempy.campaign.chunk.diagnose_case` 基于 `chunk.profile` + RDF。
 
 ---
 

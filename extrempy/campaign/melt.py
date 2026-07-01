@@ -1,6 +1,8 @@
 import os
 import glob
 import subprocess
+from abc import ABC, abstractmethod
+
 import numpy as np
 import ase.io
 
@@ -11,23 +13,7 @@ from extrempy.lazy.base import parse_machine_json
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 
 
-def recommend_mpi_layout(natoms, nodes, ntasks_per_node):
-    """Check atoms-per-task ratio and suggest MPI layout if too low.
-
-    Returns ``(ok, atoms_per_task, suggestion)``.
-    """
-    ntasks = nodes * ntasks_per_node
-    apt = natoms / max(ntasks, 1)
-    if apt >= 500:
-        return True, apt, ''
-    ideal_tasks = max(1, natoms // 800)
-    ideal_nodes = max(1, (ideal_tasks + ntasks_per_node - 1) // ntasks_per_node)
-    return False, apt, (
-        f'atoms/task={apt:.0f} < 500, '
-        f'suggest ~{ideal_tasks} MPI tasks ({ideal_nodes} node(s))')
-
-
-class EOSCalculator:
+class EOSCalculator(ABC):
     """LAMMPS-based Equation-of-State and melt determination pipeline.
 
     The constructor captures only infrastructure configuration (paths, Slurm
@@ -48,10 +34,10 @@ class EOSCalculator:
     dpgen_dir : str or None
         Element-internal DPGEN directory, i.e.
         ``{work_root}/{element}/dpgen`` (consistent with
-        :class:`DPBuilder.dpgen_dir`).  Auto-discovers DP model via
-        the ``collect_dpgen`` symlink at the root, then
-        ``iter.*/00.train/000/``; and POSCAR from the sibling
-        ``confs/`` directory (``{work_root}/{element}/confs/``).
+        :class:`DPBuilder.dpgen_dir`).  Auto-discovers DP model by
+        looking for ``frozen_model*.pb`` at the directory root, then
+        under ``iter.*/00.train/000/``.  POSCAR is looked up in the
+        sibling ``confs/`` directory (``{work_root}/{element}/confs/``).
     dp_model_path : str or None
         Explicit path to ``frozen_model.pb``.  Overrides all other search.
     poscar_path : str or None
@@ -124,11 +110,28 @@ class EOSCalculator:
 
         # state (set by subclass or batch runner)
         self.element = None
+        self.Tm_refined = None      # set by analyze_two_phase; used by NPT/NVT
+        self._two_phase_gens = []
+        self._npt_gens = []
+        self._traj_gens = []
 
     # ---- hooks (overridable) ------------------------------------------------
 
+    @abstractmethod
     def _get_tm(self):
-        raise NotImplementedError
+        """Subclass must implement: return estimated melting point (K)."""
+
+    def _get_tm_for_run(self):
+        """Return Tm for NPT/NVT: prefer refined Tm, else estimated.
+
+        ``self.Tm_refined`` is set by :meth:`analyze_two_phase` once
+        two-phase results are available; until then the estimated
+        :meth:`_get_tm` is used.
+        """
+        if self.Tm_refined is not None:
+            print(f'[{self.element}] Using refined Tm = {self.Tm_refined} K')
+            return self.Tm_refined
+        return self._get_tm()
 
     def _find_pot(self):
         """Return path to the DP frozen model.
@@ -137,9 +140,9 @@ class EOSCalculator:
           1. ``self.dp_model_path`` (explicit)
           2. ``self.dpgen_dir`` (element-internal DPGEN dir, i.e.
              ``{work_root}/{element}/dpgen`` — consistent with
-             :class:`DPBuilder.dpgen_dir`) → look for the
-             ``collect_dpgen`` symlink at the root, then glob
-             ``iter.*/00.train/000/``.
+             :class:`DPBuilder.dpgen_dir`) →
+             a. ``{dpgen_dir}/frozen_model*.pb`` at root
+             b. ``{dpgen_dir}/iter.*/00.train/000/frozen_model*.pb``
         """
         if self.dp_model_path:
             if not os.path.exists(self.dp_model_path):
@@ -148,7 +151,7 @@ class EOSCalculator:
             return self.dp_model_path
 
         if self.dpgen_dir:
-            # 1. collect_dpgen symlink at dpgen_dir root
+            # 1. frozen_model*.pb at dpgen_dir root
             for name in ['frozen_model_compressed.pb', 'frozen_model.pb']:
                 p = os.path.join(self.dpgen_dir, name)
                 if os.path.exists(p):
@@ -249,9 +252,9 @@ class EOSCalculator:
         print(f'[{self.element}] Total atoms     : {natoms_total}')
         return natoms_total
 
-    def _get_npt_temps(self, npt_n=5, npt_dT=100, npt_shift=-600):
-        """Return NPT temperature series."""
-        Tm = self._get_tm()
+    def _get_npt_temps(self, npt_n=5, npt_dT=100, npt_shift=0):
+        """Return NPT temperature series centered on Tm."""
+        Tm = self._get_tm_for_run()
         half = npt_n // 2
         offsets = np.arange(npt_n) - half
         temps = Tm + offsets * npt_dT + npt_shift
@@ -316,8 +319,6 @@ class EOSCalculator:
             tmpl = parse_machine_json(
                 self.machine_template, section='model_devi')
             for k, v in tmpl.items():
-                if k == 'command':          # env activation goes via source_list
-                    continue                # lmp_command comes from fallback or user
                 if v:                       # non-empty values override phase-1
                     cfg[k] = v
 
@@ -337,59 +338,73 @@ class EOSCalculator:
 
         return cfg
 
-    def _write_sbatch(self, cfg, job_name, work_dir):
-        """Write job.sbatch in *work_dir*."""
-        lines = ['#!/bin/bash']
-        lines.append(f'#SBATCH -J {job_name}')
-        if cfg.get('partition'):
-            lines.append(f'#SBATCH -p {cfg["partition"]}')
-        lines.append(f'#SBATCH -N {cfg["nodes"]}')
-        lines.append(f'#SBATCH --ntasks-per-node={cfg["ntasks_per_node"]}')
-        if cfg.get('wall_time'):
-            lines.append(f'#SBATCH -t {cfg["wall_time"]}')
-        if cfg.get('gres'):
-            lines.append(f'#SBATCH --gres={cfg["gres"]}')
-        for flag in cfg.get('custom_flags', []):
-            flag = flag.strip()
-            if flag.startswith('#SBATCH') and '--job-name' not in flag:
-                lines.append(flag)
-        lines.append('')
-        lines.append(f'cd {work_dir}')
+    def _write_sbatch(self, cfg, job_name, work_dir, needs_traj_dir=False):
+        """Write job.sbatch in *work_dir*.
 
-        # auto-inject --cpus-per-task + OMP_NUM_THREADS when user reduces ntasks
+        Parameters
+        ----------
+        needs_traj_dir : bool
+            If True, include ``mkdir -p traj`` in the body (for NVT
+            dump jobs).  NPT/two-phase jobs do not need it.
+        """
+        # ---- SBATCH directive block ----
+        sbatch_lines = ['#!/bin/bash', f'#SBATCH -J {job_name}']
+        if cfg.get('partition'):
+            sbatch_lines.append(f'#SBATCH -p {cfg["partition"]}')
+        sbatch_lines.append(f'#SBATCH -N {cfg["nodes"]}')
+        sbatch_lines.append(f'#SBATCH --ntasks-per-node={cfg["ntasks_per_node"]}')
+        if cfg.get('wall_time'):
+            sbatch_lines.append(f'#SBATCH -t {cfg["wall_time"]}')
+        if cfg.get('gres'):
+            sbatch_lines.append(f'#SBATCH --gres={cfg["gres"]}')
+
+        # auto-inject --cpus-per-task when cores > ntasks
+        omp_env = []
         cores = cfg.get('cores_per_node')
         ntasks = cfg.get('ntasks_per_node')
         if cores and ntasks and cores > ntasks and cores % ntasks == 0:
             cpt = cores // ntasks
             if cpt > 1:
-                lines.insert(4, f'#SBATCH --cpus-per-task={cpt}')
-                lines.append(f'export OMP_NUM_THREADS={cpt}')
-                lines.append(f'export TF_INTRA_OP_PARALLELISM_THREADS={cpt}')
-                lines.append(f'export TF_INTER_OP_PARALLELISM_THREADS=2')
+                sbatch_lines.append(f'#SBATCH --cpus-per-task={cpt}')
+                omp_env = [
+                    f'export OMP_NUM_THREADS={cpt}',
+                    f'export TF_INTRA_OP_PARALLELISM_THREADS={cpt}',
+                    f'export TF_INTER_OP_PARALLELISM_THREADS=2',
+                ]
 
-        # environment setup from machine_template
+        for flag in cfg.get('custom_flags', []):
+            flag = flag.strip()
+            if flag.startswith('#SBATCH') and '--job-name' not in flag:
+                sbatch_lines.append(flag)
+
+        # ---- body ----
+        body = ['', f'cd {work_dir}', '']
+        body += omp_env
         for src in cfg.get('source_list', []):
-            lines.append(src)
+            body.append(src)
         for k, v in cfg.get('envs', {}).items():
-            lines.append(f'export {k}={v}')
+            body.append(f'export {k}={v}')
+        if needs_traj_dir:
+            body.extend(['', 'mkdir -p traj'])
 
-        lines.append('')
-        lines.append('mkdir -p traj')
+        body.append('')
         cmd = cfg['command']
         total_ranks = cfg['nodes'] * cfg['ntasks_per_node']
         if total_ranks > 1 and not any(x in cmd for x in ['mpirun', 'srun', 'mpiexec']):
             cmd = f'mpirun -np $SLURM_NTASKS {cmd}'
-        lines.append(cmd)
+        body.append(cmd)
 
         path = os.path.join(work_dir, 'job.sbatch')
         with open(path, 'w') as f:
-            f.write('\n'.join(lines) + '\n')
+            f.write('\n'.join(sbatch_lines + body) + '\n')
         return path
 
-    def _submit_slurm_job(self, gen, job_name, submit=True):
+    def _submit_slurm_job(self, gen, job_name, submit=True,
+                          needs_traj_dir=False):
         """Write sbatch -> optionally submit."""
         cfg = self._resolve_slurm_config()
-        self._write_sbatch(cfg, job_name, gen.work_path)
+        self._write_sbatch(cfg, job_name, gen.work_path,
+                           needs_traj_dir=needs_traj_dir)
         if submit:
             subprocess.run(
                 ['sbatch', 'job.sbatch'],
@@ -446,50 +461,73 @@ class EOSCalculator:
             self._two_phase_gens.append(gen)
 
     def submit_two_phase(self, submit=True):
-        for gen in self._two_phase_gens:
+        for gen in getattr(self, '_two_phase_gens', []):
             T_est = gen.params.get('Tm_estimate')
             job_name = f'{self.element}_{T_est}k'
-            self._submit_slurm_job(gen, job_name, submit=submit)
+            self._submit_slurm_job(gen, job_name, submit=submit,
+                                   needs_traj_dir=False)
 
-    def analyze_two_phase(self):
-        """Analyze two-phase dump files and return detected Tm interval."""
-        from extrempy.md.traj import read_dump_file, calculate_q4_q6
+    def analyze_two_phase(self, vote_window=5):
+        """Analyze ``chunk.profile`` + RDF and return coexist-based Tm.
 
-        results = {}
-        for gen in self._two_phase_gens:
+        Each candidate-temperature directory is diagnosed via
+        :func:`extrempy.campaign.chunk.diagnose_case`, which reads the
+        layered Q4/Q6/density from ``chunk.profile`` (split into
+        upper/lower halves) and optionally cross-checks with
+        ``rdf_top.txt``.
+
+        Parameters
+        ----------
+        vote_window : int
+            Number of trailing blocks to vote over (adaptive: capped at
+            ``n_blocks // 4`` for short trajectories).
+
+        Returns
+        -------
+        dict
+            Keys:
+            - ``results``: ``{T_est: verdict}`` where verdict ∈
+              ``solid`` / ``liquid`` / ``coexist`` / ``unknown``.
+            - ``coexist_temps``: sorted list of coexist temperatures.
+            - ``Tm_interval``: ``(min_coexist, max_coexist)`` or None.
+            - ``Tm_refined``: median of coexist temps (int) or None.
+              Also written to ``self.Tm_refined`` for downstream use.
+            - ``details``: ``{T_est: dict}`` with diagnostic fields.
+
+        Notes
+        -----
+        Breaking change: the old ``'partial'`` verdict is gone (it was
+        never produced in practice because dump files were disabled).
+        """
+        from extrempy.campaign.chunk import diagnose_case
+
+        results, details = {}, {}
+        for gen in getattr(self, '_two_phase_gens', []):
             T_est = gen.params['Tm_estimate']
-            dump_dir = os.path.join(gen.work_path, 'traj')
-            dump_files = sorted(glob.glob(os.path.join(dump_dir, 'dump.*')))
-            if not dump_files:
-                dump_files = sorted(glob.glob(os.path.join(
-                    gen.work_path, 'dump.*')))
+            diag = diagnose_case(
+                chunk_path=os.path.join(gen.work_path, 'chunk.profile'),
+                rdf_top_path=os.path.join(gen.work_path, 'rdf_top.txt'),
+                vote_window=vote_window)
+            results[T_est] = diag['verdict']
+            details[T_est] = diag
 
-            verdict = 'unknown'
-            for df in dump_files[-3:]:
-                atoms = read_dump_file(df)
-                if atoms is None:
-                    continue
-                q4, q6, *_ = calculate_q4_q6(atoms)
-                if q4 > 0.1 and q6 > 0.3:
-                    verdict = 'solid'
-                elif q4 > 0.05:
-                    verdict = 'partial'
-                else:
-                    verdict = 'liquid'
+        coexist_temps = sorted(t for t, v in results.items()
+                               if v == 'coexist')
+        Tm_interval = (min(coexist_temps), max(coexist_temps)) \
+            if coexist_temps else None
+        Tm_refined = (int(np.median(coexist_temps))
+                      if coexist_temps else None)
+        self.Tm_refined = Tm_refined
 
-            results[T_est] = verdict
-
-        solid_temps = [t for t, v in results.items() if v == 'solid']
-        liquid_temps = [t for t, v in results.items() if v == 'liquid']
-        Tm_interval = (max(solid_temps), min(liquid_temps)) \
-            if solid_temps and liquid_temps else None
-        return dict(results=results, Tm_interval=Tm_interval)
+        return dict(results=results, coexist_temps=coexist_temps,
+                    Tm_interval=Tm_interval, Tm_refined=Tm_refined,
+                    details=details)
 
     # ---- Phase 2: NPT property scan ----------------------------------------
 
     def generate_npt(self, phases=('solid', 'liquid'),
                      supercell=(5, 5, 5),
-                     npt_n=5, npt_dT=100, npt_shift=-600,
+                     npt_n=5, npt_dT=100, npt_shift=0,
                      liquid_superheat=1.9,
                      equil_steps=100000, dt=0.001, pressure=0.0001,
                      output_internal=False,
@@ -504,7 +542,8 @@ class EOSCalculator:
             keyword, plus ``ele_entropy`` and ``free_energy`` computes.
         latt_temp_list : list of int, optional
             Explicit temperature series.  When given, ``npt_n`` / ``npt_dT`` /
-            ``npt_shift`` are ignored.
+            ``npt_shift`` are ignored.  Default series is centered on Tm
+            (``npt_shift=0``), spanning roughly ``Tm ± npt_dT*npt_n/2``.
         """
         temps = latt_temp_list if latt_temp_list is not None \
             else self._get_npt_temps(npt_n, npt_dT, npt_shift)
@@ -537,32 +576,33 @@ class EOSCalculator:
                 os.makedirs(work_dir, exist_ok=True)
                 gen = self._build_gen(work_dir, template)
                 gen.get_files(poscar_path=poscar, pot_path=pot)
-                params = dict(base, temperature=T)
+                params = dict(base, temperature=T, phase=phase)
+                params['is_dump'] = False   # explicit & symmetric
                 if output_internal:
                     model_ext = os.path.splitext(pot)[1] or '.pb'
                     params['model_name'] = f'cp{model_ext}'
                 if phase == 'liquid':
-                    Tm = self._get_tm()
+                    Tm = self._get_tm_for_run()
                     params['high_temperature'] = int(
                         liquid_superheat * Tm)
-                    params['is_dump'] = False
                 gen.update(params)
                 gen.render()
                 self._npt_gens.append(gen)
 
     def submit_npt(self, submit=True):
-        for gen in self._npt_gens:
+        for gen in getattr(self, '_npt_gens', []):
             T = gen.params.get('temperature')
-            phase = 'liquid' if 'high_temperature' in gen.params else 'solid'
+            phase = gen.params.get('phase', 'solid')
             job_name = f'{self.element}_{T}k_npt_{phase}'
-            self._submit_slurm_job(gen, job_name, submit=submit)
+            self._submit_slurm_job(gen, job_name, submit=submit,
+                                   needs_traj_dir=False)
 
     def analyze_npt(self):
         """Read each ``thermo.dat`` and return a summary DataFrame.
 
         Columns include temperature, phase, and per-column averages from
-        the LAMMPS thermo output (energy, free\_energy, ele\_entropy,
-        volume, density, …).
+        the LAMMPS thermo output (energy, free_energy, ele_entropy,
+        volume, density, ...).
         """
         import pandas as pd
         from extrempy.md.thermo import read_thermo_dat
@@ -570,7 +610,7 @@ class EOSCalculator:
         rows = []
         for gen in getattr(self, '_npt_gens', []):
             T = gen.params.get('temperature')
-            phase = 'liquid' if 'high_temperature' in gen.params else 'solid'
+            phase = gen.params.get('phase', 'solid')
             thermo_file = os.path.join(gen.work_path, 'thermo.dat')
             if not os.path.exists(thermo_file):
                 continue
@@ -594,7 +634,7 @@ class EOSCalculator:
                           equil_steps=100000, dump_freq=10,
                           dt=0.001, pressure=0.0001):
         """Generate NVT trajectory LAMMPS inputs."""
-        Tm = int(self._get_tm())
+        Tm = int(self._get_tm_for_run())
         print(f'[{self.element}] NVT temperature         : {Tm} K')
         pot = self._find_pot()
 
@@ -619,7 +659,7 @@ class EOSCalculator:
             os.makedirs(work_dir, exist_ok=True)
             gen = self._build_gen(work_dir, template)
             gen.get_files(poscar_path=poscar, pot_path=pot)
-            params = dict(base, temperature=Tm)
+            params = dict(base, temperature=Tm, phase=phase)
             if phase == 'liquid':
                 params['high_temperature'] = int(
                     liquid_superheat * Tm)
@@ -628,22 +668,46 @@ class EOSCalculator:
             self._traj_gens.append(gen)
 
     def submit_nvt_traj(self, submit=True):
-        for gen in self._traj_gens:
+        for gen in getattr(self, '_traj_gens', []):
             T = gen.params['temperature']
-            phase = 'liquid' if 'high_temperature' in gen.params else 'solid'
+            phase = gen.params.get('phase', 'solid')
             job_name = f'{self.element}_{T}k_nvt_{phase}'
-            self._submit_slurm_job(gen, job_name, submit=submit)
+            self._submit_slurm_job(gen, job_name, submit=submit,
+                                   needs_traj_dir=True)
 
     # ---- full pipeline ----------------------------------------------------
 
-    def run_all(self, submit=True):
-        """Convenience: run the full generate -> submit pipeline."""
+    def run_two_phase(self, submit=True):
+        """Phase 1 only: generate + submit two-phase jobs."""
         self.generate_two_phase()
         self.submit_two_phase(submit=submit)
+
+    def run_property_scans(self, submit=True):
+        """Phase 2+3: generate + submit NPT + NVT.
+
+        Uses ``self.Tm_refined`` if available (set by
+        :meth:`analyze_two_phase`), otherwise falls back to the
+        estimated :meth:`_get_tm`.
+        """
         self.generate_npt()
         self.submit_npt(submit=submit)
         self.generate_nvt_traj()
         self.submit_nvt_traj(submit=submit)
+
+    def run_all(self, submit=True):
+        """Convenience: two-phase + property scans using ESTIMATED Tm.
+
+        NOTE: This does **not** call :meth:`analyze_two_phase`, so
+        ``Tm_refined`` is not set — NPT/NVT use the estimated
+        :meth:`_get_tm`.  For the refined-Tm workflow::
+
+            calc.run_two_phase(submit=True)
+            # ... wait for jobs, then:
+            calc.analyze_two_phase()            # sets Tm_refined
+            calc.run_property_scans(submit=True)
+        """
+        self.run_two_phase(submit=submit)
+        self.run_property_scans(submit=submit)
 
 
 class ElementEOSCalculator(EOSCalculator):
@@ -681,6 +745,11 @@ def run_eos_all(elements, work_root, **kwargs):
     -------
     dict
         ``{element: 'generated' | error_message}``
+
+    Notes
+    -----
+    ``element`` is positional-only in :class:`ElementEOSCalculator`;
+    do not pass ``element=`` via ``**kwargs``.
     """
     results = {}
     for el in elements:

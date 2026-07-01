@@ -345,6 +345,12 @@ def read_rdf_file(filepath):
 def batch_analyze_two_phase(dump_dir, element=None, z_mid=None):
     """Batch-analyze two-phase dump files and return phase per temperature.
 
+    .. deprecated::
+        Uses dump-based diagnosis.  For new code, use
+        :func:`extrempy.campaign.chunk.diagnose_case` with
+        ``chunk.profile`` + RDF (the two-phase template now produces
+        ``chunk.profile`` and ``rdf_*.txt`` as the primary diagnostics).
+
     Parameters
     ----------
     dump_dir : str
