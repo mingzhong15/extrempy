@@ -27,8 +27,9 @@ def parse_machine_json(path, section='model_devi'):
     Returns
     -------
     dict
-        Keys: ``partition``, ``nodes``, ``ntasks_per_node``, ``wall_time``,
-        ``gres``, ``command``, ``source_list``, ``custom_flags``, ``envs``.
+        Keys: ``partition``, ``nodes``, ``ntasks_per_node``, ``cores_per_node``,
+        ``wall_time``, ``gres``, ``command``, ``source_list``, ``custom_flags``,
+        ``envs``.
         Missing values are ``None``.
     """
     with open(os.path.expanduser(path)) as f:
@@ -50,6 +51,7 @@ def parse_machine_json(path, section='model_devi'):
         cfg['partition'] = bat.get('slurm_partition')
         cfg['nodes'] = bat.get('slurm_nodes') or res.get('number_node')
         cfg['ntasks_per_node'] = (bat.get('slurm_ntasks_per_node')
+                                  or res.get('ntasks_per_node')
                                   or res.get('cpu_per_node'))
         cfg['wall_time'] = bat.get('slurm_time')
         cfg['gres'] = bat.get('slurm_gres')
@@ -57,12 +59,12 @@ def parse_machine_json(path, section='model_devi'):
         # resources format (common for model_devi on Slurm clusters)
         cfg['partition'] = res.get('queue_name')
         cfg['nodes'] = res.get('number_node')
-        cfg['ntasks_per_node'] = res.get('cpu_per_node')
+        cfg['ntasks_per_node'] = res.get('ntasks_per_node') or res.get('cpu_per_node')
         cfg['wall_time'] = None
         ngpu = res.get('gpu_per_node', 0)
         cfg['gres'] = f'gpu:{ngpu}' if ngpu else None
 
-    cfg['cores_per_node'] = cfg.get('ntasks_per_node')
+    cfg['cores_per_node'] = res.get('cpu_per_node') or cfg.get('ntasks_per_node')
     cfg['command'] = raw.get('command')
     cfg['source_list'] = res.get('source_list', [])
     cfg['custom_flags'] = res.get('custom_flags', [])

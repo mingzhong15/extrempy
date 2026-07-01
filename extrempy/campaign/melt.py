@@ -245,7 +245,8 @@ class EOSCalculator:
         """Build Slurm config with priority: machine_template -> constructor -> fallback.
 
         Returns dict with keys: partition, nodes, ntasks_per_node,
-        wall_time, gres, command, source_list, custom_flags, envs.
+        cores_per_node, wall_time, gres, command, source_list,
+        custom_flags, envs.
         """
         # ---- Phase 1: hardcoded fallback defaults ----
         cfg = dict(
@@ -313,6 +314,8 @@ class EOSCalculator:
             if cpt > 1:
                 lines.insert(4, f'#SBATCH --cpus-per-task={cpt}')
                 lines.append(f'export OMP_NUM_THREADS={cpt}')
+                lines.append(f'export TF_INTRA_OP_PARALLELISM_THREADS={cpt}')
+                lines.append(f'export TF_INTER_OP_PARALLELISM_THREADS=2')
 
         # environment setup from machine_template
         for src in cfg.get('source_list', []):
