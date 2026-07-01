@@ -18,10 +18,15 @@ echo ""
 echo "=== Push to GitHub ($BRANCH) ==="
 git push origin "$BRANCH"
 
-# 3. Pull on mgt (stash local mgt changes if needed)
+# 3. Pull on mgt (stash local changes if needed)
 echo ""
 echo "=== Pull on mgt ==="
 ssh mgt "cd ~/github/extrempy && git stash && git pull && git stash pop"
+
+# 4. Pull on cmt.calc4
+echo ""
+echo "=== Pull on cmt.calc4 ==="
+ssh cmt.calc4 "cd ~/zengqy/github/extrempy && git stash && git pull && git stash pop"
 
 echo ""
 echo "=== Done ==="
