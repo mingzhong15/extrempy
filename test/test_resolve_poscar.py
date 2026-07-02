@@ -121,6 +121,25 @@ class TestSourceFactories(unittest.TestCase):
             self.assertEqual(len(sc), 3)
             self.assertTrue(all(isinstance(x, int) and x >= 1 for x in sc))
 
+    def test_calculate_supercell_does_not_exceed_target(self):
+        """calculate_supercell must return a supercell whose total atom
+        count does NOT exceed target_atoms (upper bound semantics)."""
+        from extrempy.structure import calculate_supercell
+        # 8-atom primitive, target 80 → max n_total <= 80
+        sc = calculate_supercell(8, target_atoms=80)
+        n_total = sc[0] * sc[1] * sc[2] * 8
+        self.assertLessEqual(n_total, 80)
+        self.assertEqual(n_total, 64)  # 2x2x2
+
+        # 4-atom primitive, target 80
+        sc = calculate_supercell(4, target_atoms=80)
+        n_total = sc[0] * sc[1] * sc[2] * 4
+        self.assertLessEqual(n_total, 80)
+
+        # Edge case: primitive already exceeds target → (1,1,1)
+        sc = calculate_supercell(100, target_atoms=80)
+        self.assertEqual(sc, (1, 1, 1))
+
 
 class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
     """Smoke test: ElementDPBuilder.generate_poscars dispatches to

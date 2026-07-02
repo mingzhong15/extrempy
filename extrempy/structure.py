@@ -122,29 +122,35 @@ def _to_supercell_matrix(supercell):
 
 def calculate_supercell(n_atoms_cell, target_atoms=100):
     """
-    Calculate optimal isotropic supercell (nx, ny, nz).
+    Calculate optimal isotropic supercell (nx, ny, nz) such that the
+    total atom count does NOT exceed *target_atoms*.
 
     Parameters
     ----------
     n_atoms_cell : int
         Number of atoms in the primitive cell.
     target_atoms : int
-        Target total number of atoms.
+        Upper bound on total atom count.
 
     Returns
     -------
     (int, int, int)
+        Supercell dimensions.  When the primitive cell itself exceeds
+        *target_atoms*, falls back to ``(1, 1, 1)`` — in this case
+        ``n_total`` will exceed *target_atoms*.
     """
     ratio = target_atoms / n_atoms_cell
     n = max(1, int(np.round(ratio ** (1 / 3))))
-    best, best_diff = None, float("inf")
+    best, best_n = None, 0
     for nx in range(max(1, n - 1), n + 2):
         for ny in range(max(1, n - 1), n + 2):
             for nz in range(max(1, n - 1), n + 2):
                 n_total = nx * ny * nz * n_atoms_cell
-                diff = abs(n_total - target_atoms)
-                if diff < best_diff:
-                    best_diff, best = diff, (nx, ny, nz)
+                if n_total <= target_atoms and n_total > best_n:
+                    best_n = n_total
+                    best = (nx, ny, nz)
+    if best is None:
+        best = (1, 1, 1)
     return best
 
 

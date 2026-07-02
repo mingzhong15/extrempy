@@ -581,9 +581,15 @@ class ElementDPBuilder(DPBuilder):
         for i, s in enumerate(segs):
             tc, te = s["T_core"], s["T_explore"]
             nT = len(_generate_temp_list(te[0], te[1]))
-            sg = f" SG#{s['sg']}" if "sg" in s else ""
+            if "sg" in s:
+                intl = s.get('spg_intl', '')
+                sg_str = f" SG#{s['sg']}" + (f" ({intl})" if intl else "")
+            else:
+                sg_str = ""
+            e_pa = s.get('energy_per_atom')
+            e_str = f" {e_pa:.4f} eV/atom" if e_pa is not None else ""
             extra = f" [{s['phase_type']}]" if s.get("phase_type") else ""
-            print(f"  [{i}] {s['label']}{sg}{extra}  "
+            print(f"  [{i}] {s['label']}{sg_str}{e_str}{extra}  "
                   f"T_core=[{tc[0]:.0f},{tc[1]:.0f}]K  "
                   f"T_explore=[{te[0]:.0f},{te[1]:.0f}]K  {nT} T-points")
         return segs
