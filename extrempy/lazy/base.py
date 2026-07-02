@@ -130,6 +130,10 @@ class InputGenerator:
         lines.append('')
         lines.append(f'cd {self.work_path}')
         lines.append('')
+        source_list = tmpl.get('source_list', [])
+        for src in source_list:
+            lines.append(f"source {src}")
+        lines.append('')
         lines.append(command)
 
         sbatch_path = os.path.join(self.work_path, 'job.sbatch')

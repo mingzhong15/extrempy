@@ -445,15 +445,19 @@ class TestSbatchGeneration(unittest.TestCase):
         with open(mj_path, 'w') as f:
             json.dump({
                 'model_devi': {
-                    'command': '/usr/local/bin/lmp_custom -in run.in',
+                    'command': '/usr/local/bin/lmp_custom',
                     'resources': {'number_node': 2, 'cpu_per_node': 32}
                 }
             }, f)
         calc = ElementEOSCalculator('Al', work_root=self.tmpdir, dpgen_dir=None,
                                     machine_template=mj_path)
         cfg = calc._resolve_slurm_config()
-        self.assertEqual(cfg['command'], '/usr/local/bin/lmp_custom -in run.in')
+        self.assertEqual(cfg['command'], '/usr/local/bin/lmp_custom')
         self.assertEqual(cfg['nodes'], 2)
+        path = calc._write_sbatch(cfg, 'test-job', self.tmpdir)
+        with open(path) as f:
+            content = f.read()
+        self.assertIn('-in run.in > log.run', content)
 
 
 class TestNptShiftDefault(unittest.TestCase):

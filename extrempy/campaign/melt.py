@@ -308,7 +308,7 @@ class EOSCalculator(ABC):
             ntasks_per_node=32,
             wall_time='24:00:00',
             gres=None,
-            command='lmp -in run.in > log.run',
+            command='lmp',
             source_list=[],
             custom_flags=[],
             envs={},
@@ -381,7 +381,7 @@ class EOSCalculator(ABC):
         body = ['', f'cd {work_dir}', '']
         body += omp_env
         for src in cfg.get('source_list', []):
-            body.append(src)
+            body.append(f"source {src}")
         for k, v in cfg.get('envs', {}).items():
             body.append(f'export {k}={v}')
         if needs_traj_dir:
@@ -389,6 +389,8 @@ class EOSCalculator(ABC):
 
         body.append('')
         cmd = cfg['command']
+        if not any(x in cmd for x in [' -in ', ' -i ', ' > ']):
+            cmd = f"{cmd} -in run.in > log.run"
         total_ranks = cfg['nodes'] * cfg['ntasks_per_node']
         if total_ranks > 1 and not any(x in cmd for x in ['mpirun', 'srun', 'mpiexec']):
             cmd = f'mpirun -np $SLURM_NTASKS {cmd}'
