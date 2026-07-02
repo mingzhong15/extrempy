@@ -9,7 +9,7 @@ POTCAR_MAP = {
         'Li': {'variant': '', 'ZVAL': 0},
         'Na': {'variant': '', 'ZVAL': 0},
         'K':  {'variant': '', 'ZVAL': 0},
-        'Rb': {'variant': '', 'ZVAL': 0},
+        'Rb': {'variant': '_sv', 'ZVAL': 0},  # Rb_pv has PSMAXN issue; use _sv instead
         'Cs': {'variant': '', 'ZVAL': 0},
         # Alkaline earth
         'Be': {'variant': '', 'ZVAL': 0},
