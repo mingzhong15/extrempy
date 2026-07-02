@@ -172,8 +172,11 @@ def make_phase_segments(element, method="pbesol-v2", mode="ambient",
     n = len(phases)
     segs = []
     for i, p in enumerate(phases):
+        # Sanitize spg_intl for filename safety: remove spaces, replace
+        # '/' with '-' (e.g. 'C 222' -> 'C222', 'P21/c' -> 'P21-c').
+        spg_safe = p['spg_intl'].replace(' ', '').replace('/', '-')
         segs.append({
-            "label": f"{element}-{p['sg']}",
+            "label": f"{element}-SG{p['sg']}-{spg_safe}",
             "structure": "mc3d",
             "T_core": (Tm * i / n, Tm * (i + 1) / n),
             "T_explore": (T_min, T_max_factor * Tm),

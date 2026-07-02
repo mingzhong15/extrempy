@@ -97,9 +97,31 @@ class DPBuilder:
         return zvals
 
     # ---- init AIMD ----
-    def generate_init_aimd(self, segs, elements=None):
+    def generate_init_aimd(self, segs, elements=None, aimd_temps=None):
+        """
+        Generate AIMD input files for each phase segment.
+
+        Parameters
+        ----------
+        segs : list[dict]
+            Phase segments from get_phase_segments().
+        elements : list[str] or None
+        aimd_temps : list[int] or None
+            Explicit AIMD temperature (K) for each seg.  Length must
+            equal ``len(segs)``.  When None, the temperature is derived
+            from each seg: solid phases use the T_core midpoint, liquid
+            phases use ``liquid_T_factor * Tm`` (overheated to ensure
+            melting).  When specifying manually for a liquid seg, ensure
+            the temperature is high enough to melt the structure
+            (typically >= 1.5*Tm).
+        """
         if elements is None:
             elements = self.elements
+        if aimd_temps is not None:
+            if len(aimd_temps) != len(segs):
+                raise ValueError(
+                    f"aimd_temps length {len(aimd_temps)} != "
+                    f"len(segs) {len(segs)}")
         self.potcar_map.build(elements, quiet=True)  # validate ZVAL, no file write
         self._ensure_dirs()
         Tm = self._get_tm()
@@ -121,16 +143,22 @@ class DPBuilder:
         for i, seg in enumerate(segs):
             label = seg['label']
             is_liquid = label.endswith('-LIQ')
+            # --- structure-related: poscar_ref and solid_label ---
             if is_liquid:
                 if solid_label is None:
                     raise RuntimeError(
                         f"Liquid phase '{label}' has no preceding solid phase "
                         f"to seed the melt POSCAR from.")
                 poscar_ref = solid_label
-                T_ref = int(self.liquid_T_factor * Tm)
             else:
                 poscar_ref = label
                 solid_label = label
+            # --- temperature: user-specified > derived ---
+            if aimd_temps is not None:
+                T_ref = int(aimd_temps[i])
+            elif is_liquid:
+                T_ref = int(self.liquid_T_factor * Tm)
+            else:
                 T_ref = int((seg['T_core'][0] + seg['T_core'][1]) / 2)
             job_label = f"{seg['structure'].upper()}-{T_ref}K"
             work_dir = os.path.join(self.init_vasp_dir, job_label)
@@ -149,9 +177,14 @@ class DPBuilder:
             gen.generate_incar(md_steps=self.aimd_steps, dt=self.aimd_dt,
                                latt_temp=T_ref, mode='aimd-ttm')
             self._aimd_dirs.append((job_label, work_dir, label))
-            print(f"  [{i}] {job_label}: T_ref={T_ref}K (1.8Tm={1.8*Tm:.0f})"
-                  if is_liquid else
-                  f"  [{i}] {job_label}: T_ref={T_ref}K (T_core midpoint)")
+            # Print temperature source for traceability.
+            if aimd_temps is not None:
+                src = "user-specified"
+            elif is_liquid:
+                src = f"1.8Tm={1.8*Tm:.0f}"
+            else:
+                src = "T_core midpoint"
+            print(f"  [{i}] {job_label}: T_ref={T_ref}K ({src})")
 
     def submit_init_aimd(self, submit=True):
         status = "submitted" if submit else "not submitted"
@@ -614,6 +647,24 @@ class ElementDPBuilder(DPBuilder):
                                source=lambda: None)
                 continue
 
+            # For mc3d segs, the label at this stage is the base form
+            # (e.g. 'Ga-SG64-Cmca') without the atom count.  Check if a
+            # POSCAR with an atom-count suffix already exists; if so,
+            # extract the natoms and update seg['label'] in place, then
+            # skip downloading.  This supports re-runs without re-fetch.
+            if st == 'mc3d':
+                existing = sorted(glob.glob(
+                    os.path.join(self.confs_dir, f'{label}-*.POSCAR')))
+                if existing:
+                    # natoms is the last '-'-separated segment of the
+                    # basename (e.g. 'Ga-SG64-Cmca-64' -> '64').
+                    base = os.path.basename(existing[0])[:-len('.POSCAR')]
+                    natoms = base.rsplit('-', 1)[-1]
+                    seg['label'] = f'{label}-{natoms}'
+                    label = seg['label']
+                    print(f'  [{label}] exists, skip download')
+                    continue
+
             # Print phase metadata before resolving the POSCAR.
             if st == 'mc3d':
                 sg = seg.get('sg', '?')
@@ -644,9 +695,23 @@ class ElementDPBuilder(DPBuilder):
                     f"Structure type '{st}' not supported for {label}.\n"
                     f"  Use mc3d_mode='ambient' to fetch from MC3D.")
 
-            resolve_poscar(self.element, label,
-                           confs_dir=self.confs_dir,
-                           source=src)
+            out_path = resolve_poscar(self.element, label,
+                                      confs_dir=self.confs_dir,
+                                      source=src)
+
+            # For mc3d segs, after download+supercell, read the written
+            # file to get the actual atom count and update seg['label']
+            # to the full form '{base}-{natoms}' (e.g. 'Ga-SG64-Cmca-64').
+            # Downstream (generate_init_aimd, generate_dpgen) reads
+            # seg['label'] to locate the POSCAR.
+            if st == 'mc3d' and out_path is not None:
+                from ase.io import read
+                try:
+                    natoms = len(read(out_path, format='vasp'))
+                    seg['label'] = f'{label}-{natoms}'
+                    print(f'  -> {seg["label"]} ({natoms} atoms)')
+                except Exception as e:
+                    print(f'  [warn] could not read {out_path}: {e}')
 
 
 def build_all_elements(work_root, elements=None, **kwargs):

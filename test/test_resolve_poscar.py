@@ -231,7 +231,7 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
         # Mimic make_phase_segments output: solid mc3d seg with uuid,
         # followed by a LIQ mc3d seg WITHOUT structure_uuid.
         segs = [
-            {'label': 'Ga-64', 'structure': 'mc3d',
+            {'label': 'Ga-SG64-Cmca', 'structure': 'mc3d',
              'structure_uuid': 'fake-uuid-64',
              'T_core': (0, 150), 'T_explore': (300, 600)},
             {'label': 'Ga-LIQ', 'structure': 'mc3d',  # no structure_uuid
@@ -252,11 +252,12 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
             b.generate_poscars(segs)  # must not raise
         finally:
             struct_mod.resolve_poscar = saved
-        self.assertEqual(calls, ['Ga-64', 'Ga-LIQ'])
+        self.assertEqual(calls, ['Ga-SG64-Cmca', 'Ga-LIQ'])
 
     def test_make_phase_segments_sorted_by_energy_with_spg_intl(self):
         """make_phase_segments output must be sorted by energy_per_atom
-        ascending (lowest first); each solid seg carries spg_intl;
+        ascending (lowest first); each solid seg label uses the
+        spg_intl symbol (e.g. 'Ga-SG64-Cmca') not the bare sg number;
         LIQ seg (no energy) appended last."""
         from extrempy.lazy.mc3d import make_phase_segments
         from unittest.mock import patch
@@ -264,10 +265,10 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
         fake_phases = [
             {'id': 'a', 'sg': 64, 'structure_uuid': 'u1',
              'energy_per_atom': -100.0, 'phase_type': 'ambient',
-             'n_atoms_cell': 4, 'spg_intl': 'Cmca'},
+             'n_atoms_cell': 8, 'spg_intl': 'Cmca'},
             {'id': 'b', 'sg': 15, 'structure_uuid': 'u2',
              'energy_per_atom': -200.0, 'phase_type': 'ambient',
-             'n_atoms_cell': 4, 'spg_intl': 'C222'},
+             'n_atoms_cell': 4, 'spg_intl': 'C 222'},
             {'id': 'c', 'sg': 63, 'structure_uuid': 'u3',
              'energy_per_atom': None, 'phase_type': 'ambient',
              'n_atoms_cell': 4, 'spg_intl': 'Cmcm'},
@@ -279,13 +280,31 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
         self.assertEqual(solid[0]['mc3d_id'], 'b')
         self.assertEqual(solid[1]['mc3d_id'], 'a')
         self.assertEqual(solid[2]['mc3d_id'], 'c')
-        # spg_intl present on every solid seg
+        # Labels use spg_intl with SG prefix, sanitized for filenames.
+        # 'C 222' -> 'C222' (spaces removed), 'Cmca' -> 'Cmca'
+        self.assertEqual(solid[0]['label'], 'Ga-SG15-C222')
+        self.assertEqual(solid[1]['label'], 'Ga-SG64-Cmca')
+        self.assertEqual(solid[2]['label'], 'Ga-SG63-Cmcm')
+        # No bare number that could be confused with atom counts.
+        for s in solid:
+            self.assertTrue(s['label'].split('-')[1].startswith('SG'))
+        # spg_intl field preserved on every solid seg
         for s in solid:
             self.assertIn('spg_intl', s)
-        self.assertEqual(solid[0]['spg_intl'], 'C222')
+        self.assertEqual(solid[0]['spg_intl'], 'C 222')
         # LIQ last, no spg_intl
         self.assertTrue(segs[-1]['label'].endswith('-LIQ'))
         self.assertNotIn('spg_intl', segs[-1])
+
+    def test_generate_init_aimd_aimd_temps_length_mismatch(self):
+        """aimd_temps length != len(segs) must raise ValueError."""
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        b = ElementDPBuilder('Al', work_root=self.tmpdir,
+                             potcar_lib=self.tmpdir, potcar_set='PBE54')
+        segs = [{'label': 'Al-FCC', 'structure': 'fcc',
+                 'T_core': (300, 600), 'T_explore': (200, 1200)}]
+        with self.assertRaises(ValueError):
+            b.generate_init_aimd(segs, aimd_temps=[300, 400])  # len mismatch
 
 
 class TestEosFindPoscarRoleBased(unittest.TestCase):
