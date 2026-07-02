@@ -599,6 +599,15 @@ class ElementDPBuilder(DPBuilder):
             label = seg['label']
             st = seg['structure']
 
+            # LIQ segs (from make_phase_segments) carry structure='mc3d'
+            # but no structure_uuid; skip source construction and let
+            # resolve_poscar handle the LIQ placeholder (returns None).
+            if label.endswith('-LIQ'):
+                resolve_poscar(self.element, label,
+                               confs_dir=self.confs_dir,
+                               source=lambda: None)
+                continue
+
             # Build the source for this seg.
             if st in SUPPORTED_STRUCTURES:
                 src = ase_source(self.element, structure_type=st,

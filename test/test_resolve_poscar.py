@@ -198,6 +198,43 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
         # which matches the unified contract.
         self.assertIn('Al-LIQ', calls)
 
+    def test_mc3d_liq_seg_without_uuid_does_not_crash(self):
+        """LIQ segs from make_phase_segments carry structure='mc3d' but no
+        structure_uuid; generate_poscars must skip them before the mc3d
+        source construction (which would raise ValueError on missing uuid).
+        This is a regression test for the 0f3c093 refactor.
+        """
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+
+        b = ElementDPBuilder(
+            'Ga', work_root=self.tmpdir, potcar_lib=self.tmpdir,
+            potcar_set='PBE54', mc3d_mode='ambient')
+        # Mimic make_phase_segments output: solid mc3d seg with uuid,
+        # followed by a LIQ mc3d seg WITHOUT structure_uuid.
+        segs = [
+            {'label': 'Ga-64', 'structure': 'mc3d',
+             'structure_uuid': 'fake-uuid-64',
+             'T_core': (0, 150), 'T_explore': (300, 600)},
+            {'label': 'Ga-LIQ', 'structure': 'mc3d',  # no structure_uuid
+             'T_core': (300, 600), 'T_explore': (300, 600)},
+        ]
+        import extrempy.structure as struct_mod
+        saved = struct_mod.resolve_poscar
+        calls = []
+
+        def fake_resolve(element, label, *, confs_dir, source, **kw):
+            calls.append(label)
+            if label.endswith('-LIQ'):
+                return None
+            return os.path.join(confs_dir, f'{label}.POSCAR')
+
+        struct_mod.resolve_poscar = fake_resolve
+        try:
+            b.generate_poscars(segs)  # must not raise
+        finally:
+            struct_mod.resolve_poscar = saved
+        self.assertEqual(calls, ['Ga-64', 'Ga-LIQ'])
+
 
 class TestEosFindPoscarRoleBased(unittest.TestCase):
     """Verify EOSCalculator._find_poscar dispatches by role and falls
