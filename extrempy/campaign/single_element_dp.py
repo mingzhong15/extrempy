@@ -608,6 +608,18 @@ class ElementDPBuilder(DPBuilder):
                                source=lambda: None)
                 continue
 
+            # Print phase metadata before resolving the POSCAR.
+            if st == 'mc3d':
+                sg = seg.get('sg', '?')
+                spg = seg.get('spg_intl', '?')
+                e_pa = seg.get('energy_per_atom')
+                e_str = (f'{e_pa:.4f} eV/atom'
+                         if e_pa is not None else '? eV/atom')
+                ptype = seg.get('phase_type', '?')
+                print(f'  [{label}] SG#{sg} ({spg}), {e_str}, {ptype}')
+            else:
+                print(f'  [{label}] {st.upper()} (ASE)')
+
             # Build the source for this seg.
             if st in SUPPORTED_STRUCTURES:
                 src = ase_source(self.element, structure_type=st,

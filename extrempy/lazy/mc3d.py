@@ -163,6 +163,12 @@ def make_phase_segments(element, method="pbesol-v2", mode="ambient",
     if not phases:
         raise ValueError(f"No MC3D phases for {element} (mode={mode})")
 
+    # Explicitly sort by energy_per_atom ascending (lowest energy first);
+    # None values sort last.  Makes the output contract self-evident and
+    # independent of get_phases' internal ordering.
+    phases.sort(key=lambda p: (p["energy_per_atom"] is None,
+                                p["energy_per_atom"] or 0))
+
     n = len(phases)
     segs = []
     for i, p in enumerate(phases):
@@ -174,6 +180,7 @@ def make_phase_segments(element, method="pbesol-v2", mode="ambient",
             "mc3d_id": p["id"],
             "structure_uuid": p["structure_uuid"],
             "sg": p["sg"],
+            "spg_intl": p["spg_intl"],
             "energy_per_atom": p["energy_per_atom"],
             "phase_type": p["phase_type"],
         })

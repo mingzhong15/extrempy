@@ -235,6 +235,39 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
             struct_mod.resolve_poscar = saved
         self.assertEqual(calls, ['Ga-64', 'Ga-LIQ'])
 
+    def test_make_phase_segments_sorted_by_energy_with_spg_intl(self):
+        """make_phase_segments output must be sorted by energy_per_atom
+        ascending (lowest first); each solid seg carries spg_intl;
+        LIQ seg (no energy) appended last."""
+        from extrempy.lazy.mc3d import make_phase_segments
+        from unittest.mock import patch
+        # Mock get_phases to return UNSORTED data with spg_intl.
+        fake_phases = [
+            {'id': 'a', 'sg': 64, 'structure_uuid': 'u1',
+             'energy_per_atom': -100.0, 'phase_type': 'ambient',
+             'n_atoms_cell': 4, 'spg_intl': 'Cmca'},
+            {'id': 'b', 'sg': 15, 'structure_uuid': 'u2',
+             'energy_per_atom': -200.0, 'phase_type': 'ambient',
+             'n_atoms_cell': 4, 'spg_intl': 'C222'},
+            {'id': 'c', 'sg': 63, 'structure_uuid': 'u3',
+             'energy_per_atom': None, 'phase_type': 'ambient',
+             'n_atoms_cell': 4, 'spg_intl': 'Cmcm'},
+        ]
+        with patch('extrempy.lazy.mc3d.get_phases', return_value=fake_phases):
+            segs = make_phase_segments('Ga', Tm=300)
+        solid = [s for s in segs if not s['label'].endswith('-LIQ')]
+        # Sorted ascending: -200 (b) < -100 (a) < None (c)
+        self.assertEqual(solid[0]['mc3d_id'], 'b')
+        self.assertEqual(solid[1]['mc3d_id'], 'a')
+        self.assertEqual(solid[2]['mc3d_id'], 'c')
+        # spg_intl present on every solid seg
+        for s in solid:
+            self.assertIn('spg_intl', s)
+        self.assertEqual(solid[0]['spg_intl'], 'C222')
+        # LIQ last, no spg_intl
+        self.assertTrue(segs[-1]['label'].endswith('-LIQ'))
+        self.assertNotIn('spg_intl', segs[-1])
+
 
 class TestEosFindPoscarRoleBased(unittest.TestCase):
     """Verify EOSCalculator._find_poscar dispatches by role and falls
