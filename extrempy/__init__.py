@@ -22,6 +22,7 @@ from .structure import (
     mc3d_source,
     DEFAULT_SUPERCELL,
 )
+from .lazy.surface import make_slab, make_slabs
 
 def start():
     print("import successful ! ")
