@@ -105,12 +105,18 @@ class DPBuilder:
         segs : list[dict]
             Phase segments from get_phase_segments().
         elements : list[str] or None
-        aimd_temps : list[int] or None
-            Explicit AIMD temperature (K) for each seg.  Length must
+        aimd_temps : list[int | list[int]] or None
+            AIMD temperature(s) (K) for each seg.  Length must
             equal ``len(segs)``.  When None, the temperature is derived
             from each seg: solid phases use the T_core midpoint, liquid
             phases use ``liquid_T_factor * Tm`` (overheated to ensure
-            melting).  When specifying manually for a liquid seg, ensure
+            melting).
+
+            Each element can be:
+            - ``int``: one AIMD job at that temperature.
+            - ``list[int]``: multiple AIMD jobs per seg (e.g. ``[300, 545]``).
+
+            When specifying manually for a liquid seg, ensure
             the temperature is high enough to melt the structure
             (typically >= 1.5*Tm).
         """
@@ -121,6 +127,17 @@ class DPBuilder:
                 raise ValueError(
                     f"aimd_temps length {len(aimd_temps)} != "
                     f"len(segs) {len(segs)}")
+            # Expand multi-temp specs so each entry is one job.
+            flat_segs, flat_temps = [], []
+            for seg, temps in zip(segs, aimd_temps):
+                if isinstance(temps, (list, tuple)):
+                    for t in temps:
+                        flat_segs.append(seg)
+                        flat_temps.append(t)
+                else:
+                    flat_segs.append(seg)
+                    flat_temps.append(temps)
+            segs, aimd_temps = flat_segs, flat_temps
         self.potcar_map.build(elements, quiet=True)  # validate ZVAL, no file write
         self._ensure_dirs()
         Tm = self._get_tm()
