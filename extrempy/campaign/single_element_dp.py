@@ -159,7 +159,11 @@ class DPBuilder:
                 T_ref = int(self.liquid_T_factor * Tm)
             else:
                 T_ref = int((seg['T_core'][0] + seg['T_core'][1]) / 2)
-            job_label = f"{label}-{T_ref}K"
+            # job_label: {phase}-{T}K, e.g. 'Cmce-300K' / 'FCC-1712K' / 'LIQ-545K'.
+            # Prefer seg['short_name'] (mc3d spg_intl or 'LIQ'); fall back
+            # to structure type uppercased for ASE segs.
+            tag = seg.get('short_name') or seg['structure'].upper()
+            job_label = f"{tag}-{T_ref}K"
             work_dir = os.path.join(self.init_vasp_dir, job_label)
             os.makedirs(work_dir, exist_ok=True)
             gen = VASPGenerator(work_path=work_dir,

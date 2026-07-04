@@ -177,6 +177,7 @@ def make_phase_segments(element, method="pbesol-v2", mode="ambient",
         spg_safe = p['spg_intl'].replace(' ', '').replace('/', '-')
         segs.append({
             "label": f"{element}-SG{p['sg']}-{spg_safe}",
+            "short_name": spg_safe,
             "structure": "mc3d",
             "T_core": (Tm * i / n, Tm * (i + 1) / n),
             "T_explore": (T_min, T_max_factor * Tm),
@@ -201,6 +202,7 @@ def make_phase_segments(element, method="pbesol-v2", mode="ambient",
 
     segs.append({
         "label": f"{element}-LIQ",
+        "short_name": "LIQ",
         "structure": "mc3d",
         "T_core": (Tm, T_max_factor * Tm),
         "T_explore": (Tm, T_max_factor * Tm),
