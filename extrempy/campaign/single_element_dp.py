@@ -695,6 +695,12 @@ class ElementDPBuilder(DPBuilder):
                 continue
 
             if st == 'mc3d':
+                # Idempotency: if {label}.POSCAR already exists, label
+                # already has the natoms suffix from a previous run —
+                # skip entirely (no re-download, no double suffix).
+                if os.path.exists(os.path.join(self.confs_dir, f'{label}.POSCAR')):
+                    print(f"  \u2713 {label}  (exists)")
+                    continue
                 # Resolve label (with natoms) and get atoms if first run.
                 final_label, atoms = self._resolve_mc3d_poscar(seg, label)
                 seg['label'] = final_label

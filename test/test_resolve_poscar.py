@@ -257,6 +257,64 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
         # LIQ seg goes through resolve_poscar directly (returns None).
         self.assertEqual(calls, ['Ga-SG64-Cmca-64', 'Ga-LIQ'])
 
+    def test_generate_poscars_idempotent(self):
+        """Second call must not re-download or add a second natoms suffix.
+
+        Regression test: without the idempotency check, re-running
+        generate_poscars on segs whose labels already carry the natoms
+        suffix (e.g. 'Ga-SG64-Cmca-64') would hit the legacy branch in
+        _resolve_mc3d_poscar and rename to '-64-64.POSCAR'.
+        """
+        from extrempy.campaign.single_element_dp import ElementDPBuilder
+        import extrempy.structure as struct_mod
+
+        b = ElementDPBuilder(
+            'Ga', work_root=self.tmpdir, potcar_lib=self.tmpdir,
+            potcar_set='PBE54', mc3d_mode='ambient')
+        segs = [{'label': 'Ga-SG64-Cmca', 'structure': 'mc3d',
+                 'structure_uuid': 'u1', 'short_name': 'Cmca',
+                 'T_core': (0, 150), 'T_explore': (300, 600)}]
+
+        # Track mc3d_source call count.
+        call_count = [0]
+        saved_mc3d = struct_mod.mc3d_source
+
+        def fake_mc3d(*a, **kw):
+            call_count[0] += 1
+            return lambda: _FakeAtoms(n=64)
+
+        # Mock resolve_poscar so it doesn't actually write files; but
+        # for the idempotency check to trigger on the 2nd call, the
+        # file must exist — so let resolve_poscar create a real empty
+        # file at the target path.
+        saved_resolve = struct_mod.resolve_poscar
+
+        def fake_resolve(element, label, *, confs_dir, source, **kw):
+            if label.endswith('-LIQ'):
+                return None
+            out = os.path.join(confs_dir, f'{label}.POSCAR')
+            os.makedirs(confs_dir, exist_ok=True)
+            with open(out, 'w') as f:
+                f.write('mock')
+            return out
+
+        struct_mod.mc3d_source = fake_mc3d
+        struct_mod.resolve_poscar = fake_resolve
+        try:
+            # First call: downloads, label → 'Ga-SG64-Cmca-64'
+            b.generate_poscars(segs)
+            self.assertEqual(call_count[0], 1)
+            self.assertEqual(segs[0]['label'], 'Ga-SG64-Cmca-64')
+
+            # Second call: must skip (idempotency check), no re-download,
+            # no double suffix.
+            b.generate_poscars(segs)
+            self.assertEqual(call_count[0], 1)  # NOT 2
+            self.assertEqual(segs[0]['label'], 'Ga-SG64-Cmca-64')  # NOT -64-64
+        finally:
+            struct_mod.mc3d_source = saved_mc3d
+            struct_mod.resolve_poscar = saved_resolve
+
     def test_make_phase_segments_sorted_by_energy_with_spg_intl(self):
         """make_phase_segments output must be sorted by energy_per_atom
         ascending (lowest first); each solid seg label uses the
