@@ -184,6 +184,7 @@ def make_phase_segments(element, method="pbesol-v2", mode="ambient",
             "structure_uuid": p["structure_uuid"],
             "sg": p["sg"],
             "spg_intl": p["spg_intl"],
+            "n_atoms_cell": p["n_atoms_cell"],
             "energy_per_atom": p["energy_per_atom"],
             "phase_type": p["phase_type"],
         })

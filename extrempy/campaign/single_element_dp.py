@@ -7,8 +7,7 @@ import numpy as np
 
 from extrempy.lazy.vasp import VASPGenerator, VASPReader, _incar_dict, _render_incar
 from extrempy.lazy.dpgen import (DPGENGenerator,
-                                 _generate_dpgen_machine_from_file,
-                                 _generate_temp_list)
+                                 _generate_dpgen_machine_from_file)
 from extrempy.lazy.lib import (get_phase_segments, get_viable_elements,
                                ELEMENT_PHASE_DATA, SUPPORTED_STRUCTURES)
 from extrempy.lazy.potcar_map import PotcarMap
@@ -612,24 +611,69 @@ class ElementDPBuilder(DPBuilder):
         print(f"-- Phase Segments -- {self.element} "
               f"(Tm={Tm}K, {len(segs)} phases)")
         for i, s in enumerate(segs):
-            tc, te = s["T_core"], s["T_explore"]
-            nT = len(_generate_temp_list(te[0], te[1]))
+            label = s['label']
+            if label.endswith('-LIQ'):
+                print(f"  [{i}] {label}")
+                continue
             if "sg" in s:
                 intl = s.get('spg_intl', '')
-                sg_str = f" SG#{s['sg']}" + (f" ({intl})" if intl else "")
+                sg_str = f"SG#{s['sg']}" + (f" ({intl})" if intl else "")
             else:
-                sg_str = ""
+                sg_str = s.get('structure', '').upper()
+            n_cell = s.get('n_atoms_cell')
+            n_str = f"{n_cell} atoms/cell" if n_cell is not None else ""
             e_pa = s.get('energy_per_atom')
-            e_str = f" {e_pa:.4f} eV/atom" if e_pa is not None else ""
-            extra = f" [{s['phase_type']}]" if s.get("phase_type") else ""
-            print(f"  [{i}] {s['label']}{sg_str}{e_str}{extra}  "
-                  f"T_core=[{tc[0]:.0f},{tc[1]:.0f}]K  "
-                  f"T_explore=[{te[0]:.0f},{te[1]:.0f}]K  {nT} T-points")
+            e_str = f"{e_pa:.4f} eV/atom" if e_pa is not None else ""
+            parts = [f"[{i}]", label, sg_str, n_str, e_str]
+            print("  " + "  ".join(p for p in parts if p))
         return segs
 
+    def _resolve_mc3d_poscar(self, seg, label):
+        """Resolve an MC3D seg to (final_label, atoms_or_None).
+
+        Three cases (checked in order):
+          1. re-run: ``{label}-N.POSCAR`` already exists → extract N,
+             return ``(label-N, None)`` (no download, no write).
+          2. legacy: ``{label}.POSCAR`` exists (pre-natoms naming) →
+             read N, rename to ``{label}-N.POSCAR``, return
+             ``(label-N, None)``.  One-time migration; safe to remove
+             after all projects migrated to the new naming.
+          3. first run: download via mc3d_source, return
+             ``(label-N, atoms)``; caller writes the file.
+
+        ``atoms`` is None in cases 1-2 (file already on disk); caller
+        skips ``resolve_poscar`` and just prints.
+        """
+        from ase.io import read
+
+        # 1. re-run: {label}-N.POSCAR already exists
+        existing = sorted(glob.glob(
+            os.path.join(self.confs_dir, f'{label}-*.POSCAR')))
+        if existing:
+            natoms = os.path.basename(existing[0])[:-len('.POSCAR')].rsplit('-', 1)[-1]
+            return f'{label}-{natoms}', None
+
+        # 2. legacy: {label}.POSCAR exists (one-time migration)
+        legacy = os.path.join(self.confs_dir, f'{label}.POSCAR')
+        if os.path.exists(legacy):
+            n = len(read(legacy, format='vasp'))
+            os.rename(legacy, os.path.join(self.confs_dir, f'{label}-{n}.POSCAR'))
+            return f'{label}-{n}', None
+
+        # 3. first run: download + supercell
+        from extrempy.structure import mc3d_source
+        uid = seg.get('structure_uuid')
+        if not uid:
+            raise ValueError(
+                f"No structure_uuid in seg for {label} "
+                f"(make_phase_segments should populate it)")
+        atoms = mc3d_source(uid,
+                            target_atoms=self.target_atoms,
+                            method=self.mc3d_method)()
+        return f'{label}-{len(atoms)}', atoms
+
     def generate_poscars(self, segs):
-        from extrempy.structure import (resolve_poscar, ase_source,
-                                        mc3d_source)
+        from extrempy.structure import resolve_poscar, ase_source
 
         self._ensure_dirs()
         print("-- POSCAR --")
@@ -638,80 +682,37 @@ class ElementDPBuilder(DPBuilder):
             label = seg['label']
             st = seg['structure']
 
-            # LIQ segs (from make_phase_segments) carry structure='mc3d'
-            # but no structure_uuid; skip source construction and let
-            # resolve_poscar handle the LIQ placeholder (returns None).
+            # LIQ segs: resolve_poscar handles the LIQ placeholder
+            # (returns None, prints "LIQ (placeholder)").
             if label.endswith('-LIQ'):
                 resolve_poscar(self.element, label,
                                confs_dir=self.confs_dir,
                                source=lambda: None)
                 continue
 
-            # For mc3d segs, the label at this stage is the base form
-            # (e.g. 'Ga-SG64-Cmca') without the atom count.  Check if a
-            # POSCAR with an atom-count suffix already exists; if so,
-            # extract the natoms and update seg['label'] in place, then
-            # skip downloading.  This supports re-runs without re-fetch.
             if st == 'mc3d':
-                existing = sorted(glob.glob(
-                    os.path.join(self.confs_dir, f'{label}-*.POSCAR')))
-                if existing:
-                    # natoms is the last '-'-separated segment of the
-                    # basename (e.g. 'Ga-SG64-Cmca-64' -> '64').
-                    base = os.path.basename(existing[0])[:-len('.POSCAR')]
-                    natoms = base.rsplit('-', 1)[-1]
-                    seg['label'] = f'{label}-{natoms}'
-                    label = seg['label']
-                    print(f'  [{label}] exists, skip download')
-                    continue
+                # Resolve label (with natoms) and get atoms if first run.
+                final_label, atoms = self._resolve_mc3d_poscar(seg, label)
+                seg['label'] = final_label
+                natoms = final_label.rsplit('-', 1)[-1]
+                if atoms is not None:
+                    # First run: write the POSCAR with the final label.
+                    resolve_poscar(self.element, final_label,
+                                   confs_dir=self.confs_dir, source=atoms)
+                print(f"  \u2713 {final_label}  ({natoms} atoms)")
+                continue
 
-            # Print phase metadata before resolving the POSCAR.
-            if st == 'mc3d':
-                sg = seg.get('sg', '?')
-                spg = seg.get('spg_intl', '?')
-                e_pa = seg.get('energy_per_atom')
-                e_str = (f'{e_pa:.4f} eV/atom'
-                         if e_pa is not None else '? eV/atom')
-                ptype = seg.get('phase_type', '?')
-                print(f'  [{label}] SG#{sg} ({spg}), {e_str}, {ptype}')
-            else:
-                print(f'  [{label}] {st.upper()} (ASE)')
-
-            # Build the source for this seg.
+            # ASE standard structures.
             if st in SUPPORTED_STRUCTURES:
+                print(f'  [{label}] {st.upper()} (ASE)')
                 src = ase_source(self.element, structure_type=st,
                                  supercell=self.supercell)
-            elif st == 'mc3d':
-                uid = seg.get('structure_uuid')
-                if not uid:
-                    raise ValueError(
-                        f"No structure_uuid in seg for {label} "
-                        f"(make_phase_segments should populate it)")
-                src = mc3d_source(uid,
-                                  target_atoms=self.target_atoms,
-                                  method=self.mc3d_method)
+                resolve_poscar(self.element, label,
+                               confs_dir=self.confs_dir, source=src)
             else:
                 raise FileNotFoundError(
                     f"Structure type '{st}' not supported for {label}.\n"
                     f"  Use mc3d_mode='ambient' to fetch from MC3D.")
-
-            out_path = resolve_poscar(self.element, label,
-                                      confs_dir=self.confs_dir,
-                                      source=src)
-
-            # For mc3d segs, after download+supercell, read the written
-            # file to get the actual atom count and update seg['label']
-            # to the full form '{base}-{natoms}' (e.g. 'Ga-SG64-Cmca-64').
-            # Downstream (generate_init_aimd, generate_dpgen) reads
-            # seg['label'] to locate the POSCAR.
-            if st == 'mc3d' and out_path is not None:
-                from ase.io import read
-                try:
-                    natoms = len(read(out_path, format='vasp'))
-                    seg['label'] = f'{label}-{natoms}'
-                    print(f'  -> {seg["label"]} ({natoms} atoms)')
-                except Exception as e:
-                    print(f'  [warn] could not read {out_path}: {e}')
 
 
 def build_all_elements(work_root, elements=None, **kwargs):

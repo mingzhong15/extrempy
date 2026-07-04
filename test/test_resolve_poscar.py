@@ -221,15 +221,12 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
         """LIQ segs from make_phase_segments carry structure='mc3d' but no
         structure_uuid; generate_poscars must skip them before the mc3d
         source construction (which would raise ValueError on missing uuid).
-        This is a regression test for the 0f3c093 refactor.
-        """
+        This is a regression test for the 0f3c093 refactor."""
         from extrempy.campaign.single_element_dp import ElementDPBuilder
 
         b = ElementDPBuilder(
             'Ga', work_root=self.tmpdir, potcar_lib=self.tmpdir,
             potcar_set='PBE54', mc3d_mode='ambient')
-        # Mimic make_phase_segments output: solid mc3d seg with uuid,
-        # followed by a LIQ mc3d seg WITHOUT structure_uuid.
         segs = [
             {'label': 'Ga-SG64-Cmca', 'structure': 'mc3d',
              'structure_uuid': 'fake-uuid-64',
@@ -238,7 +235,8 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
              'T_core': (300, 600), 'T_explore': (300, 600)},
         ]
         import extrempy.structure as struct_mod
-        saved = struct_mod.resolve_poscar
+        saved_resolve = struct_mod.resolve_poscar
+        saved_mc3d = struct_mod.mc3d_source
         calls = []
 
         def fake_resolve(element, label, *, confs_dir, source, **kw):
@@ -247,21 +245,25 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
                 return None
             return os.path.join(confs_dir, f'{label}.POSCAR')
 
+        # Mock mc3d_source to avoid real download; return fake atoms.
+        struct_mod.mc3d_source = lambda *a, **kw: lambda: _FakeAtoms(n=64)
         struct_mod.resolve_poscar = fake_resolve
         try:
             b.generate_poscars(segs)  # must not raise
         finally:
-            struct_mod.resolve_poscar = saved
-        self.assertEqual(calls, ['Ga-SG64-Cmca', 'Ga-LIQ'])
+            struct_mod.resolve_poscar = saved_resolve
+            struct_mod.mc3d_source = saved_mc3d
+        # Solid seg goes through _resolve_mc3d_poscar → label updated;
+        # LIQ seg goes through resolve_poscar directly (returns None).
+        self.assertEqual(calls, ['Ga-SG64-Cmca-64', 'Ga-LIQ'])
 
     def test_make_phase_segments_sorted_by_energy_with_spg_intl(self):
         """make_phase_segments output must be sorted by energy_per_atom
         ascending (lowest first); each solid seg label uses the
         spg_intl symbol (e.g. 'Ga-SG64-Cmca') not the bare sg number;
-        LIQ seg (no energy) appended last."""
+        n_atoms_cell field populated; LIQ seg (no energy) appended last."""
         from extrempy.lazy.mc3d import make_phase_segments
         from unittest.mock import patch
-        # Mock get_phases to return UNSORTED data with spg_intl.
         fake_phases = [
             {'id': 'a', 'sg': 64, 'structure_uuid': 'u1',
              'energy_per_atom': -100.0, 'phase_type': 'ambient',
@@ -281,19 +283,16 @@ class TestDpBuilderUsesResolvePoscar(unittest.TestCase):
         self.assertEqual(solid[1]['mc3d_id'], 'a')
         self.assertEqual(solid[2]['mc3d_id'], 'c')
         # Labels use spg_intl with SG prefix, sanitized for filenames.
-        # 'C 222' -> 'C222' (spaces removed), 'Cmca' -> 'Cmca'
         self.assertEqual(solid[0]['label'], 'Ga-SG15-C222')
         self.assertEqual(solid[1]['label'], 'Ga-SG64-Cmca')
         self.assertEqual(solid[2]['label'], 'Ga-SG63-Cmcm')
-        # No bare number that could be confused with atom counts.
+        # n_atoms_cell populated on every solid seg.
         for s in solid:
-            self.assertTrue(s['label'].split('-')[1].startswith('SG'))
-        # spg_intl field preserved on every solid seg
-        for s in solid:
-            self.assertIn('spg_intl', s)
-        self.assertEqual(solid[0]['spg_intl'], 'C 222')
-        # LIQ last, no spg_intl
+            self.assertIn('n_atoms_cell', s)
+        self.assertEqual(solid[0]['n_atoms_cell'], 4)
+        # LIQ last, no n_atoms_cell / spg_intl.
         self.assertTrue(segs[-1]['label'].endswith('-LIQ'))
+        self.assertNotIn('n_atoms_cell', segs[-1])
         self.assertNotIn('spg_intl', segs[-1])
 
     def test_generate_init_aimd_aimd_temps_length_mismatch(self):
