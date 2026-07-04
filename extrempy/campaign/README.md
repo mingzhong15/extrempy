@@ -185,19 +185,35 @@ plot_thermo_summary(summary, 'Al')
 | `_get_two_phase_temps()` → list | `Tm + [-ΔT+shift, 0+shift, ΔT+shift]` |
 | `_get_npt_temps()` → list | `Tm + [-(n//2)..(n//2)]*dT + shift`（默认 shift=0，以 Tm 为中心） |
 
-### `ElementEOSCalculator(element, **kwargs)`
+### `ElementEOSCalculator(element, structure=None, phase_label=None, legacy=False, **kwargs)`
 
-绑定到单个元素的子类，自动实现上述 hooks。
+绑定到单个元素（及可选晶体相）的子类，自动实现上述 hooks。
 
-### `run_eos_all(elements, work_root, **kwargs)`
+- `structure`：晶体相键名（如 `'hcp'`/`'bcc'`/`'fcc'`），用于 ASE 自动生成
+  POSCAR 兜底；缺省时取元素 `rt_structure`。传 `None` 显式关闭自动生成
+  （仅用于外部 `poscar_path` 场景）。
+- `phase_label`：路径/POSCAR 标签/job_name 用的相标签，默认取 `structure`。
+  外部 POSCAR 场景可指定自定义标签如 `'exp_defect'`。
+- `legacy`：`True` 时不附加 `_{phase_label}` 段，复现旧版路径布局。
+
+### `run_eos_all(specs, work_root, **kwargs)`
 
 ```python
+# 元素符号默认按 rt_structure 跑（适用于单相元素）
 results = run_eos_all(['Al', 'Cu', 'Au'],
     work_root='/share/zeng/metals/dpmd',
     dpgen_dir='/share/zeng/metals/sample',  # outer; each element → {work}/{el}/dpgen
     machine_template='~/template/dpgen-machine.json')
 # → {'Al': 'generated', 'Cu': 'generated', 'Au': 'generated'}
+
+# 多相元素用 'Element-structure' 语法分别跑
+results = run_eos_all(['Al', 'Ti-hcp', 'Ti-bcc'],
+    work_root='/share/zeng/metals/dpmd', ...)
+# → {'Al': 'generated', 'Ti-hcp': 'generated', 'Ti-bcc': 'generated'}
 ```
+
+> 复杂场景（外部 POSCAR、`legacy=True` 读旧数据、自定义 `phase_label`）请直接
+> 构造 `ElementEOSCalculator`，不走 `run_eos_all`。
 
 ---
 
@@ -210,7 +226,10 @@ results = run_eos_all(['Al', 'Cu', 'Au'],
 | `dpgen_dir` | None | Element-internal DPGEN 目录，即 `{work_root}/{element}/dpgen`（与 `DPBuilder.dpgen_dir` 一致） |
 | `dp_model_path` | None | 显式 DP frozen_model 路径（跳过搜索） |
 | `poscar_path` | None | 显式 POSCAR 路径（跳过搜索） |
-| `poscar_dir` | None | POSCAR 目录，按 `{element}-FCC.POSCAR` / `{element}-LIQ.POSCAR` 等 label 精确匹配 |
+| `poscar_dir` | None | POSCAR 目录，按 `{element}-HCP.POSCAR` / `{element}-LIQ.POSCAR` 等 label 精确匹配 |
+| `structure` | (rt_structure) | 晶体相键名（`'hcp'`/`'bcc'`/...）；缺省按元素 rt_structure |
+| `phase_label` | (= structure) | 路径/job_name 标签；外部 POSCAR 场景可自定义 |
+| `legacy` | False | True → 路径不附加 `_{phase_label}` 段（旧版兼容） |
 
 搜索优先级：
 - **model**: `dp_model_path` > `dpgen_dir/{frozen_model.pb, frozen_model_compressed.pb}` symlink > `dpgen_dir/iter.*/00.train/000/`
@@ -263,29 +282,54 @@ results = run_eos_all(['Al', 'Cu', 'Au'],
 ```
 {work_root}/{element}/
 ├── melt/
-│   ├── {Tm1}k/
+│   ├── {Tm1}k_{phase_label}/        # 两相熔化（每个候选温度一个目录）
 │   │   ├── run.in          # LAMMPS 输入 (two-phase.j2 渲染)
 │   │   ├── confs.data      # LAMMPS 结构文件
 │   │   ├── cp.pb           # DeePMD 势函数
 │   │   ├── job.sbatch      # Slurm 脚本
 │   │   └── traj/           # dump 输出
-│   ├── {Tm2}k/
-│   └── {Tm3}k/
+│   ├── {Tm2}k_{phase_label}/
+│   └── {Tm3}k_{phase_label}/
 ├── npt/
-│   ├── {T1}k_solid/
+│   ├── {T1}k_{phase_label}_solid/
 │   │   ├── run.in          # npt-solid.j2
 │   │   ├── thermo.dat      # 热力学输出
 │   │   └── rdf.txt         # RDF
-│   ├── {T1}k_liquid/
+│   ├── {T1}k_{phase_label}_liquid/
 │   │   ├── run.in          # npt-liquid.j2
 │   │   └── ...
-│   ├── {T2}k_solid/
+│   ├── {T2}k_{phase_label}_solid/
 │   └── ...
 └── traj/
-    ├── {Tm}k_solid/
+    ├── {Tm}k_{phase_label}_solid/
     │   ├── run.in          # nvt-solid-traj.j2
     │   └── traj/           # NVT dump 轨迹
-    └── {Tm}k_liquid/
+    └── {Tm}k_{phase_label}_liquid/
+```
+
+`{phase_label}` 是晶体相标签，默认取 `structure`（即 `'hcp'`/`'bcc'`/`'fcc'`...）。
+对单相元素（如 Al, FCC）该标签也自动附加（路径形如 `Al/melt/933k_fcc/`），
+以便多元素批处理时保持一致的目录结构。要复现旧式无标签布局
+（`melt/{T}k/`、`npt/{T}k_solid/`），构造 calculator 时传 `legacy=True`。
+
+对于多相元素（如 Ti 同时有 HCP 和 BCC 两相），需分别为每个相各构造一个
+calculator 实例，保证两条熔化曲线互不覆盖：
+
+```python
+for struct in ('hcp', 'bcc'):
+    calc = ElementEOSCalculator('Ti', structure=struct,
+                                work_root='/share/zeng/metals/dpmd',
+                                dpgen_dir='/share/zeng/metals/dpmd/Ti/dpgen')
+    calc.run_two_phase(submit=False)
+```
+
+外部 POSCAR 场景：用 `structure=None` 关闭 ASE 自动生成，用 `phase_label=`
+显式指定路径/标签：
+
+```python
+calc = ElementEOSCalculator('Ti', structure=None, phase_label='exp_defect',
+                            poscar_path='/path/to/my.POSCAR',
+                            work_root='/share/zeng/metals/dpmd')
 ```
 
 ---

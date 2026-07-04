@@ -534,5 +534,192 @@ class TestEOSAbstract(unittest.TestCase):
             shutil.rmtree(tmpdir)
 
 
+class TestMultiPhasePaths(unittest.TestCase):
+    """Verify the new structure / phase_label / legacy plumbing produces
+    distinct, correctly-tagged paths and job names per crystal phase."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _calc(self, element='Ti', **kw):
+        from extrempy.campaign.melt import ElementEOSCalculator
+        defaults = dict(work_root=self.tmpdir, dpgen_dir=None)
+        defaults.update(kw)
+        return ElementEOSCalculator(element, **defaults)
+
+    def test_default_structure_resolves_from_rt_structure(self):
+        # Ti: rt_structure='hcp' (ELEMENT_PHASE_DATA['Ti'])
+        calc = self._calc('Ti')
+        self.assertEqual(calc.structure, 'hcp')
+        self.assertEqual(calc.phase_label, 'hcp')
+        self.assertEqual(calc._tag, '_hcp')
+
+    def test_explicit_structure_overrides_rt(self):
+        calc = self._calc('Ti', structure='bcc')
+        self.assertEqual(calc.structure, 'bcc')
+        self.assertEqual(calc.phase_label, 'bcc')
+        self.assertEqual(calc._tag, '_bcc')
+
+    def test_custom_phase_label_decouples_from_structure(self):
+        # External POSCAR scenario: structure is None (no ASE autogen),
+        # phase_label names the run, poscar_path supplies the file.
+        calc = self._calc('Ti', structure=None,
+                          phase_label='exp_defect',
+                          poscar_path='/tmp/fake.POSCAR')
+        self.assertIsNone(calc.structure)
+        self.assertEqual(calc.phase_label, 'exp_defect')
+        self.assertEqual(calc._tag, '_exp_defect')
+
+    def test_legacy_omits_tag(self):
+        calc = self._calc('Ti', structure='hcp', legacy=True)
+        self.assertEqual(calc._tag, '')
+        # Paths should NOT contain _hcp
+        self.assertTrue(calc.melt_dir.endswith('Ti/melt'))
+        # Sanity: non-legacy has it
+        calc2 = self._calc('Ti', structure='hcp')
+        self.assertEqual(calc2._tag, '_hcp')
+
+    def test_label_for_role_per_phase(self):
+        calc_hcp = self._calc('Ti', structure='hcp')
+        calc_bcc = self._calc('Ti', structure='bcc')
+        self.assertEqual(calc_hcp._label_for_role('solid_rt'), 'Ti-HCP')
+        self.assertEqual(calc_bcc._label_for_role('solid_rt'), 'Ti-BCC')
+        self.assertEqual(calc_hcp._label_for_role('liquid'), 'Ti-LIQ')
+
+    def test_label_for_role_custom_phase_label(self):
+        # When phase_label is custom, POSCAR label uses it (uppercased)
+        calc = self._calc('Ti', structure=None, phase_label='exp_defect')
+        self.assertEqual(calc._label_for_role('solid_rt'), 'Ti-EXP_DEFECT')
+
+    def test_label_for_role_returns_none_when_no_phase_info(self):
+        # structure=None, phase_label=None → None (no POSCAR label guess)
+        calc = self._calc('Ti', structure=None, phase_label=None)
+        self.assertIsNone(calc._label_for_role('solid_rt'))
+
+    def test_autogen_refused_when_structure_is_none(self):
+        # structure=None must NOT silently fall back to rt_structure:
+        # the user explicitly disabled autogen, so we raise a clear error.
+        from extrempy.campaign.melt import ElementEOSCalculator
+        calc = ElementEOSCalculator('Ti', structure=None,
+                                    work_root=self.tmpdir, dpgen_dir=None)
+        with self.assertRaises(FileNotFoundError) as ctx:
+            calc._autogen_solid('Ti-CUSTOM')
+        # Error should hint at the actual fix (set structure or poscar_path).
+        msg = str(ctx.exception)
+        self.assertIn('structure', msg)
+        self.assertIn('Ti', msg)
+
+    def test_melt_dir_distinct_per_phase(self):
+        # The bug being fixed: HCP and BCC at same T used to collide.
+        from extrempy.campaign.melt import ElementEOSCalculator
+        hcp = ElementEOSCalculator('Ti', structure='hcp',
+                                   work_root=self.tmpdir, dpgen_dir=None)
+        bcc = ElementEOSCalculator('Ti', structure='bcc',
+                                   work_root=self.tmpdir, dpgen_dir=None)
+        hcp_dir = os.path.join(hcp.melt_dir, f'1541k{hcp._tag}')
+        bcc_dir = os.path.join(bcc.melt_dir, f'1541k{bcc._tag}')
+        self.assertNotEqual(hcp_dir, bcc_dir)
+        self.assertIn('_hcp', hcp_dir)
+        self.assertIn('_bcc', bcc_dir)
+
+    def test_npt_dir_distinct_per_phase_and_role(self):
+        from extrempy.campaign.melt import ElementEOSCalculator
+        hcp = ElementEOSCalculator('Ti', structure='hcp',
+                                   work_root=self.tmpdir, dpgen_dir=None)
+        bcc = ElementEOSCalculator('Ti', structure='bcc',
+                                   work_root=self.tmpdir, dpgen_dir=None)
+        # npt/<T>k_<phase_label>_<role>
+        hcp_solid = os.path.join(hcp.npt_dir, f'1941k{hcp._tag}_solid')
+        bcc_solid = os.path.join(bcc.npt_dir, f'1941k{bcc._tag}_solid')
+        self.assertNotEqual(hcp_solid, bcc_solid)
+        # Roles still distinct within one phase
+        hcp_liq = os.path.join(hcp.npt_dir, f'1941k{hcp._tag}_liquid')
+        self.assertNotEqual(hcp_solid, hcp_liq)
+
+    def test_legacy_paths_match_old_layout(self):
+        # legacy=True should reproduce exactly the pre-multi-phase paths.
+        calc = self._calc('Ti', structure='hcp', legacy=True)
+        self.assertEqual(
+            os.path.join(calc.melt_dir, '1541k'),
+            os.path.join(self.tmpdir, 'Ti', 'melt', '1541k'))
+        self.assertEqual(
+            os.path.join(calc.npt_dir, '1941k_solid'),
+            os.path.join(self.tmpdir, 'Ti', 'npt', '1941k_solid'))
+        self.assertEqual(
+            os.path.join(calc.traj_dir, '1941k_solid'),
+            os.path.join(self.tmpdir, 'Ti', 'traj', '1941k_solid'))
+
+    def test_job_names_include_phase(self):
+        # Slurm job-name must distinguish HCP/BCC Ti in `squeue`.
+        from extrempy.campaign.melt import ElementEOSCalculator
+        hcp = ElementEOSCalculator('Ti', structure='hcp',
+                                   work_root=self.tmpdir, dpgen_dir=None)
+        bcc = ElementEOSCalculator('Ti', structure='bcc',
+                                   work_root=self.tmpdir, dpgen_dir=None)
+        # Mock the gens to expose job_name construction.
+        for calc, want in ((hcp, 'Ti_hcp_1541k'), (bcc, 'Ti_bcc_1541k')):
+            gen = MagicMock()
+            gen.params = {'Tm_estimate': 1541}
+            calc._two_phase_gens = [gen]
+            calc._submit_slurm_job = MagicMock()
+            calc.submit_two_phase(submit=False)
+            args, kwargs = calc._submit_slurm_job.call_args
+            self.assertEqual(args[1], want, calc.structure)
+
+    def test_job_names_legacy_omit_phase(self):
+        from extrempy.campaign.melt import ElementEOSCalculator
+        calc = ElementEOSCalculator('Ti', structure='hcp', legacy=True,
+                                    work_root=self.tmpdir, dpgen_dir=None)
+        gen = MagicMock()
+        gen.params = {'Tm_estimate': 1541}
+        calc._two_phase_gens = [gen]
+        calc._submit_slurm_job = MagicMock()
+        calc.submit_two_phase(submit=False)
+        args, _ = calc._submit_slurm_job.call_args
+        self.assertEqual(args[1], 'Ti_1541k')
+
+
+class TestRunEosAllPhaseSyntax(unittest.TestCase):
+    """run_eos_all should accept 'Ti-hcp' / 'Ti-bcc' syntax."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_parse_phase_spec(self):
+        from extrempy.campaign import melt as melt_mod
+        built = []
+
+        def fake_init(self, element, structure=None, phase_label=None,
+                      legacy=False, **kwargs):
+            self.element = element
+            self.structure = structure or 'fcc'
+            self.phase_label = phase_label or self.structure
+            self.legacy = legacy
+            self.work_root = kwargs.get('work_root')
+            built.append((element, self.structure, self.phase_label))
+
+        with patch.object(melt_mod.ElementEOSCalculator, '__init__',
+                          fake_init):
+            with patch.object(melt_mod.ElementEOSCalculator, 'run_all',
+                              lambda self, submit: None):
+                results = melt_mod.run_eos_all(
+                    ['Al', 'Ti-hcp', 'Ti-bcc', 'Ti-BCC'],
+                    work_root=self.tmpdir)
+        # All should be 'generated'
+        self.assertEqual(set(results.values()), {'generated'})
+        # Find each built calc
+        self.assertIn(('Al', 'fcc', 'fcc'), built)
+        self.assertIn(('Ti', 'hcp', 'hcp'), built)
+        self.assertIn(('Ti', 'bcc', 'bcc'), built)
+        # 'Ti-BCC' lowercased → structure='bcc'
+        self.assertIn(('Ti', 'bcc', 'bcc'), built)
+
+
 if __name__ == '__main__':
     unittest.main()

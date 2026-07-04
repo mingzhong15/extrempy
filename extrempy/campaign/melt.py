@@ -20,12 +20,15 @@ class EOSCalculator(ABC):
     resources, template directory).  All simulation parameters are passed
     directly to the ``generate_*`` step methods.
 
-    Directory layout per element::
+    Directory layout per element (with ``legacy=False``, the default)::
 
         {work_root}/{element}/
-            melt/{T}k/        # two-phase result (one dir per candidate T)
-            npt/{T}k_{phase}/ # NPT property scan
-            traj/{T}k_{phase}/# NVT trajectory dump
+            melt/{T}k_{phase_label}/        # two-phase (one dir per candidate T)
+            npt/{T}k_{phase_label}_{role}/  # NPT property scan (role=solid|liquid)
+            traj/{T}k_{phase_label}_{role}/ # NVT trajectory dump
+
+    With ``legacy=True`` the ``_{phase_label}`` segment is omitted (matches
+    the pre-multi-phase layout, e.g. ``melt/{T}k/``, ``npt/{T}k_solid/``).
 
     Parameters
     ----------
@@ -110,6 +113,11 @@ class EOSCalculator(ABC):
 
         # state (set by subclass or batch runner)
         self.element = None
+        self.structure = None       # crystal-structure key ('hcp'|'bcc'|...)
+                                     # used only by _autogen_solid via ASE
+        self.phase_label = None     # tag for paths/POSCAR-labels/job names
+                                     # (defaults to structure in subclasses)
+        self.legacy = False          # True → omit _{phase_label} from paths
         self.Tm_refined = None      # set by analyze_two_phase; used by NPT/NVT
         self._two_phase_gens = []
         self._npt_gens = []
@@ -202,11 +210,18 @@ class EOSCalculator(ABC):
         return self._find_poscar('solid_rt')
 
     def _label_for_role(self, role):
-        """Return the expected POSCAR label for a role."""
+        """Return the expected POSCAR label for a role.
+
+        Uses :attr:`phase_label` (falling back to :attr:`structure`) so
+        that ``Ti-HCP`` / ``Ti-BCC`` resolve correctly per allotrope.
+        Returns ``None`` when both are unset (e.g. an external POSCAR
+        scenario with no custom label); :meth:`_find_poscar` then relies
+        on ``poscar_path`` or raises.
+        """
         if role == 'liquid':
             return f'{self.element}-LIQ'
-        rt = ELEMENT_PHASE_DATA.get(self.element, {}).get('rt_structure')
-        return f'{self.element}-{rt.upper()}' if rt else None
+        label = self.phase_label or self.structure
+        return f'{self.element}-{label.upper()}' if label else None
 
     def _search_dirs(self):
         """Directories to look for ``{label}.POSCAR``."""
@@ -229,18 +244,29 @@ class EOSCalculator(ABC):
         return None
 
     def _autogen_solid(self, label):
-        """solid_rt fallback: ASE-generate the RT-stable phase POSCAR."""
+        """solid_rt fallback: ASE-generate the requested phase POSCAR.
+
+        Uses :attr:`structure` (the crystal-structure key, e.g. ``'hcp'``
+        or ``'bcc'``) rather than the element's ``rt_structure``, so
+        that BCC Ti (for instance) can be auto-generated even though
+        ``rt_structure`` for Ti is ``'hcp'``.
+
+        Refuses to auto-generate when :attr:`structure` is ``None`` —
+        that signals the user explicitly disabled autogen (external
+        POSCAR scenario); they must provide ``poscar_path`` /
+        ``poscar_dir`` instead.
+        """
         from extrempy.structure import resolve_poscar, ase_source
-        rt = ELEMENT_PHASE_DATA.get(self.element, {}).get('rt_structure')
-        if not rt:
+        if not self.structure:
             raise FileNotFoundError(
-                f'No POSCAR found for {self.element} (role=solid_rt). '
-                'Set poscar_path, poscar_dir, or dpgen_dir.')
+                f'No POSCAR found for {self.element} (role=solid_rt) '
+                'and structure is None — ASE auto-generation is disabled. '
+                'Set poscar_path, poscar_dir, or structure.')
         out_dir = os.path.join(self._element_dir, 'confs')
         return resolve_poscar(
             self.element, label,
             confs_dir=out_dir,
-            source=ase_source(self.element, structure_type=rt),
+            source=ase_source(self.element, structure_type=self.structure),
             verbose=False)
 
     def _get_natoms(self, poscar_path, nx, ny, nz):
@@ -277,6 +303,20 @@ class EOSCalculator(ABC):
     @property
     def traj_dir(self):
         return os.path.join(self._element_dir, 'traj')
+
+    @property
+    def _tag(self):
+        """Path/job-name tag encoding the crystal phase.
+
+        Returns ``''`` when :attr:`legacy` is True (pre-multi-phase
+        layout, e.g. ``melt/{T}k/``), otherwise ``'_{phase_label}'``
+        (e.g. ``'_hcp'``).  ``phase_label`` falls back to
+        :attr:`structure` if unset.
+        """
+        if self.legacy:
+            return ''
+        label = self.phase_label or self.structure
+        return f'_{label}' if label else ''
 
     # ---- helpers ------------------------------------------------------------
 
@@ -451,7 +491,7 @@ class EOSCalculator(ABC):
 
         self._two_phase_gens = []
         for T_est in temps:
-            work_dir = os.path.join(self.melt_dir, f'{T_est}k')
+            work_dir = os.path.join(self.melt_dir, f'{T_est}k{self._tag}')
             os.makedirs(work_dir, exist_ok=True)
             gen = self._build_gen(work_dir, 'two-phase.j2')
             gen.get_files(poscar_path=poscar, pot_path=pot)
@@ -465,7 +505,7 @@ class EOSCalculator(ABC):
     def submit_two_phase(self, submit=True):
         for gen in getattr(self, '_two_phase_gens', []):
             T_est = gen.params.get('Tm_estimate')
-            job_name = f'{self.element}_{T_est}k'
+            job_name = f'{self.element}{self._tag}_{T_est}k'
             self._submit_slurm_job(gen, job_name, submit=submit,
                                    needs_traj_dir=False)
 
@@ -574,7 +614,7 @@ class EOSCalculator(ABC):
                             else 'npt-solid.j2')
             for T in temps:
                 work_dir = os.path.join(
-                    self.npt_dir, f'{T}k_{phase}')
+                    self.npt_dir, f'{T}k{self._tag}_{phase}')
                 os.makedirs(work_dir, exist_ok=True)
                 gen = self._build_gen(work_dir, template)
                 gen.get_files(poscar_path=poscar, pot_path=pot)
@@ -595,16 +635,22 @@ class EOSCalculator(ABC):
         for gen in getattr(self, '_npt_gens', []):
             T = gen.params.get('temperature')
             phase = gen.params.get('phase', 'solid')
-            job_name = f'{self.element}_{T}k_npt_{phase}'
+            job_name = f'{self.element}{self._tag}_{T}k_npt_{phase}'
             self._submit_slurm_job(gen, job_name, submit=submit,
                                    needs_traj_dir=False)
 
     def analyze_npt(self):
         """Read each ``thermo.dat`` and return a summary DataFrame.
 
-        Columns include temperature, phase, and per-column averages from
-        the LAMMPS thermo output (energy, free_energy, ele_entropy,
-        volume, density, ...).
+        Columns include temperature, phase, ``element``, ``structure``
+        (crystal-structure key, e.g. ``'hcp'``), ``phase_label`` (the
+        tag used in paths, e.g. ``'hcp'`` or a custom label), and
+        per-column averages from the LAMMPS thermo output (energy,
+        free_energy, ele_entropy, volume, density, ...).
+
+        The ``element`` / ``structure`` / ``phase_label`` columns let
+        you tell apart HCP vs BCC results when both are run for the same
+        element.
         """
         import pandas as pd
         from extrempy.md.thermo import read_thermo_dat
@@ -619,7 +665,13 @@ class EOSCalculator(ABC):
             _, averages, _ = read_thermo_dat(thermo_file)
             if averages is None:
                 continue
-            row = {'temperature': T, 'phase': phase}
+            row = {
+                'temperature': T,
+                'phase': phase,
+                'element': self.element,
+                'structure': self.structure,
+                'phase_label': self.phase_label or self.structure,
+            }
             for col, stats in averages.items():
                 row[f'{col}_mean'] = stats['mean']
             rows.append(row)
@@ -657,7 +709,7 @@ class EOSCalculator(ABC):
             self._get_natoms(poscar, _nx, _ny, _nz)
             template = ('nvt-liquid-traj.j2' if phase == 'liquid'
                         else 'nvt-solid-traj.j2')
-            work_dir = os.path.join(self.traj_dir, f'{Tm}k_{phase}')
+            work_dir = os.path.join(self.traj_dir, f'{Tm}k{self._tag}_{phase}')
             os.makedirs(work_dir, exist_ok=True)
             gen = self._build_gen(work_dir, template)
             gen.get_files(poscar_path=poscar, pot_path=pot)
@@ -673,7 +725,7 @@ class EOSCalculator(ABC):
         for gen in getattr(self, '_traj_gens', []):
             T = gen.params['temperature']
             phase = gen.params.get('phase', 'solid')
-            job_name = f'{self.element}_{T}k_nvt_{phase}'
+            job_name = f'{self.element}{self._tag}_{T}k_nvt_{phase}'
             self._submit_slurm_job(gen, job_name, submit=submit,
                                    needs_traj_dir=True)
 
@@ -713,53 +765,127 @@ class EOSCalculator(ABC):
 
 
 class ElementEOSCalculator(EOSCalculator):
-    """EOSCalculator bound to a single element.
+    """EOSCalculator bound to a single element (and optionally a phase).
+
+    Parameters
+    ----------
+    element : str
+        Element symbol, e.g. ``'Ti'``.
+    structure : str or None, optional
+        Crystal-structure key for the solid phase, e.g. ``'hcp'`` or
+        ``'bcc'``.  When omitted (default), falls back to the element's
+        ``rt_structure`` from :data:`ELEMENT_PHASE_DATA`.  Pass ``None``
+        explicitly to disable ASE auto-generation entirely — required
+        when supplying a custom ``poscar_path`` whose structure doesn't
+        match any standard key (in which case also set ``phase_label``).
+        Used by :meth:`_autogen_solid` and as the default for
+        ``phase_label``.
+    phase_label : str or None
+        Tag used in directory paths, POSCAR labels, and Slurm job names
+        (e.g. ``Ti/melt/1541k_hcp/``).  Defaults to ``structure`` (or
+        ``rt_structure`` when ``structure`` is left unset).  Override
+        when supplying a custom ``poscar_path`` whose structure
+        doesn't match any standard key (e.g. ``phase_label='defect'``).
+    legacy : bool
+        When ``True``, omit the ``_{phase_label}`` segment from paths
+        and job names — matches the pre-multi-phase layout
+        (``melt/{T}k/``, ``npt/{T}k_solid/``).  Use for reading data
+        generated before this option existed.
+    **kwargs
+        Forwarded to :class:`EOSCalculator` (``work_root``,
+        ``dpgen_dir``, ``dp_model_path``, ``poscar_path``,
+        ``poscar_dir``, Slurm resources, etc.).
 
     Examples
     --------
+    >>> # Single-phase element (Al, fcc) — defaults work
     >>> calc = ElementEOSCalculator('Al',
     ...     work_root='/share/zeng/metals/dpmd',
     ...     dpgen_dir='/share/zeng/metals/sample',
     ...     machine_template='~/template/dpgen-machine.json')
     >>> calc.run_all(submit=False)
+
+    >>> # Multi-phase element: separate HCP and BCC Ti melt curves
+    >>> for struct in ('hcp', 'bcc'):
+    ...     calc = ElementEOSCalculator('Ti', structure=struct,
+    ...         work_root='/data/home/nudtzengqy/work/metals_melt/02.dpmd',
+    ...         dpgen_dir='/data/home/nudtzengqy/work/metals_melt/02.dpmd/Ti/dpgen')
+    ...     calc.run_two_phase(submit=False)
+
+    >>> # External POSCAR with a custom phase label (no ASE autogen)
+    >>> calc = ElementEOSCalculator('Ti', structure=None,
+    ...     poscar_path='/path/to/my.POSCAR', phase_label='exp_struct',
+    ...     work_root='/share/zeng/metals/dpmd')
     """
 
-    def __init__(self, element, **kwargs):
+    # Sentinel: "user did not pass structure" vs "user passed structure=None".
+    _STRUCTURE_UNSET = object()
+
+    def __init__(self, element, structure=_STRUCTURE_UNSET,
+                 phase_label=None, legacy=False, **kwargs):
         super().__init__(**kwargs)
         self.element = element
+        # structure: 'hcp'|'bcc'|... for ASE autogen.
+        #   unset  → resolve from rt_structure (default for convenience)
+        #   None   → user opted out (external POSCAR only); never autogen
+        #   str    → use this structure key
+        if structure is ElementEOSCalculator._STRUCTURE_UNSET:
+            self.structure = self._resolve_structure()
+        else:
+            self.structure = structure
+        # phase_label: tag for paths/POSCAR-labels/job names.
+        # Defaults to structure (which may itself be None for external POSCAR).
+        self.phase_label = phase_label or self.structure
+        self.legacy = legacy
+
+    def _resolve_structure(self):
+        """Return the element's default structure key (rt_structure)."""
+        return ELEMENT_PHASE_DATA.get(self.element, {}).get('rt_structure')
 
     def _get_tm(self):
         data = ELEMENT_PHASE_DATA.get(self.element, {})
         return data.get('Tm', 1000)
 
 
-def run_eos_all(elements, work_root, **kwargs):
-    """Batch EOSCalculator for a list of elements.
+def run_eos_all(specs, work_root, **kwargs):
+    """Batch ``ElementEOSCalculator`` for a list of element/phase specs.
 
     Parameters
     ----------
-    elements : list of str
+    specs : list of str
+        Each entry is either a bare element symbol (``'Al'``) or
+        ``'Element-structure'`` (``'Ti-hcp'``, ``'Ti-bcc'``).  The
+        structure part is case-insensitive and forwarded as
+        ``structure=`` to :class:`ElementEOSCalculator`.
     work_root : str
     **kwargs
-        Forwarded to each ``ElementEOSCalculator``.
+        Forwarded to each ``ElementEOSCalculator``.  Cannot include
+        ``structure=`` (use the spec syntax instead).
 
     Returns
     -------
     dict
-        ``{element: 'generated' | error_message}``
+        ``{spec: 'generated' | error_message}``
 
     Notes
     -----
-    ``element`` is positional-only in :class:`ElementEOSCalculator`;
-    do not pass ``element=`` via ``**kwargs``.
+    For more complex cases (external POSCAR, custom ``phase_label``,
+    ``legacy=True`` for reading old data), construct
+    :class:`ElementEOSCalculator` directly rather than via this helper.
     """
     results = {}
-    for el in elements:
+    for spec in specs:
         try:
-            calc = ElementEOSCalculator(
-                el, work_root=work_root, **kwargs)
+            if '-' in spec:
+                el, struct = spec.split('-', 1)
+                calc = ElementEOSCalculator(
+                    el, structure=struct.lower(),
+                    work_root=work_root, **kwargs)
+            else:
+                calc = ElementEOSCalculator(
+                    spec, work_root=work_root, **kwargs)
             calc.run_all(submit=False)
-            results[el] = 'generated'
+            results[spec] = 'generated'
         except Exception as e:
-            results[el] = str(e)
+            results[spec] = str(e)
     return results
