@@ -159,7 +159,7 @@ class DPBuilder:
                 T_ref = int(self.liquid_T_factor * Tm)
             else:
                 T_ref = int((seg['T_core'][0] + seg['T_core'][1]) / 2)
-            job_label = f"{seg['structure'].upper()}-{T_ref}K"
+            job_label = f"{label}-{T_ref}K"
             work_dir = os.path.join(self.init_vasp_dir, job_label)
             os.makedirs(work_dir, exist_ok=True)
             gen = VASPGenerator(work_path=work_dir,
