@@ -664,22 +664,40 @@ class ElementDPBuilder(DPBuilder):
 
         ``atoms`` is None in cases 1-2 (file already on disk); caller
         skips ``resolve_poscar`` and just prints.
+
+        When ``target_atoms`` has changed since the last run, the stale
+        file is deleted and re-generated (case 3).
         """
         from ase.io import read
+
+        # Expected natoms for current target_atoms (used to detect stale files).
+        n_cell = seg.get('n_atoms_cell')
+        expected = None
+        if n_cell is not None:
+            from extrempy.structure import calculate_supercell
+            sc = calculate_supercell(n_cell, self.target_atoms)
+            expected = n_cell * sc[0] * sc[1] * sc[2]
 
         # 1. re-run: {label}-N.POSCAR already exists
         existing = sorted(glob.glob(
             os.path.join(self.confs_dir, f'{label}-*.POSCAR')))
         if existing:
-            natoms = os.path.basename(existing[0])[:-len('.POSCAR')].rsplit('-', 1)[-1]
-            return f'{label}-{natoms}', None
+            existing_n = int(os.path.basename(existing[0])[:-len('.POSCAR')].rsplit('-', 1)[-1])
+            if expected is not None and existing_n != expected:
+                for f in existing:
+                    os.remove(f)
+            else:
+                return f'{label}-{existing_n}', None
 
         # 2. legacy: {label}.POSCAR exists (one-time migration)
         legacy = os.path.join(self.confs_dir, f'{label}.POSCAR')
         if os.path.exists(legacy):
             n = len(read(legacy, format='vasp'))
-            os.rename(legacy, os.path.join(self.confs_dir, f'{label}-{n}.POSCAR'))
-            return f'{label}-{n}', None
+            if expected is not None and n != expected:
+                os.remove(legacy)
+            else:
+                os.rename(legacy, os.path.join(self.confs_dir, f'{label}-{n}.POSCAR'))
+                return f'{label}-{n}', None
 
         # 3. first run: download + supercell
         from extrempy.structure import mc3d_source
