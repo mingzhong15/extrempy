@@ -10,6 +10,25 @@ def fermi_dirac(E, mu, T):
     return 1/(np.exp((E-mu)/(kb*T*J2eV)) + 1)
 
 
+def _normalize_source_list(entries):
+    """Normalize ``machine.json`` ``source_list`` entries to bare paths.
+
+    Entries are sometimes written as ``"source /path/to/activate"`` while
+    the sbatch generators prepend ``source`` themselves; a leading
+    ``source``/``.`` keyword is stripped here to avoid a doubled
+    ``source source …`` line.  Bare paths are returned unchanged.
+    """
+    out = []
+    for s in entries or []:
+        s = s.strip()
+        toks = s.split(None, 1)
+        if toks and toks[0].lower() in ('source', '.'):
+            s = toks[1].strip() if len(toks) > 1 else ''
+        if s:
+            out.append(s)
+    return out
+
+
 def parse_machine_json(path, section='model_devi'):
     """Extract Slurm configuration from a dpgen-style ``machine.json``.
 
@@ -66,7 +85,7 @@ def parse_machine_json(path, section='model_devi'):
 
     cfg['cores_per_node'] = res.get('cpu_per_node') or cfg.get('ntasks_per_node')
     cfg['command'] = raw.get('command')
-    cfg['source_list'] = res.get('source_list', [])
+    cfg['source_list'] = _normalize_source_list(res.get('source_list', []))
     cfg['custom_flags'] = res.get('custom_flags', [])
     cfg['envs'] = res.get('envs', {})
 
