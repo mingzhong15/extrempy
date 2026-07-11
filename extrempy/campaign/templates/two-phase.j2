@@ -72,6 +72,13 @@ unfix           1
 
 fix             CHUNK all ave/chunk 1 1 1000 cells density/mass temp c_Q[1] c_Q[2] file chunk.profile
 
+# RDF: record from here so the whole heating/cooling/equil window is covered
+compute         rdfbot bottom rdf 100
+fix             RDFBOT bottom ave/time 1 1 10000 c_rdfbot[*] file rdf_bottom.txt mode vector
+
+compute         rdftop top rdf 100
+fix             RDFTOP top ave/time 1 1 10000 c_rdftop[*] file rdf_top.txt mode vector
+
 # heat uppper part to obtain liquid phase
 #variable        DUMP_STEP equal 5000
 #dump            1 all custom ${DUMP_STEP} traj/dump.* id type xu yu zu vx vy vz c_KE c_PE c_Q[2]
@@ -109,12 +116,6 @@ variable        STEP equal step
 
 
 variable        EQUI_STEP equal {{ equilibrate_step | default('100000') }}
-
-compute         rdfbot bottom rdf 100 
-fix             RDFBOT bottom ave/time 1 1 10000 c_rdfbot[*] file rdf_bottom.txt mode vector
-
-compute         rdftop top rdf 100 
-fix             RDFTOP top ave/time 1 1 10000 c_rdftop[*] file rdf_top.txt mode vector
 
 fix             PRINT all print 100 "${STEP} ${myTEMP} ${myPRESS} ${VOL} ${RHO} ${myENTHALPY} ${ETOTAL}" &
                       title "# step temp[K] press[bars] vol[A^3] density[gcc] enthalpy[eV] etotal[eV]" &
