@@ -1,0 +1,1868 @@
+{
+  "version": "0.2",
+  "last_updated": "2026-07-14",
+  "conventions": {
+    "P_unit": "GPa",
+    "T_unit": "K",
+    "P_range": "thermodynamic stability range",
+    "T_range": "thermodynamic stability range",
+    "note": "P_explore and T_explore are derived at runtime (P_range +/- 15%, T_range +/- 300K). mc3d_uuid=null means to be backfilled by backfill_mc3d_uuid()."
+  },
+  "compounds": {
+    "Fe": {
+      "Tm_at_1bar_K": 1811,
+      "phases": [
+        {
+          "label": "Fe-bcc-alpha",
+          "spacegroup": 229,
+          "spg_intl": "Im-3m",
+          "mc3d_uuid": "bd50ab2a-d144-4985-a6ff-cf7d07a0e293",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            13
+          ],
+          "T_range_K": [
+            300,
+            1185
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "Fe-fcc-gamma",
+          "spacegroup": 225,
+          "spg_intl": "Fm-3m",
+          "mc3d_uuid": "2d1c747c-839e-414e-9b12-752b1836771f",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            13
+          ],
+          "T_range_K": [
+            1185,
+            1667
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "Fe-bcc-delta",
+          "spacegroup": 229,
+          "spg_intl": "Im-3m",
+          "mc3d_uuid": "bd50ab2a-d144-4985-a6ff-cf7d07a0e293",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            13
+          ],
+          "T_range_K": [
+            1667,
+            1811
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "Fe-hcp-epsilon",
+          "spacegroup": 194,
+          "spg_intl": "P6_3/mmc",
+          "mc3d_uuid": "1ee14869-9988-4c2e-96c5-abb35e0893bf",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            13,
+            400
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Mao 1990"
+          ]
+        },
+        {
+          "label": "Fe-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1811,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Ca": {
+      "Tm_at_1bar_K": 1115,
+      "phases": [
+        {
+          "label": "Ca-fcc",
+          "spacegroup": 225,
+          "spg_intl": "Fm-3m",
+          "mc3d_uuid": "05653d10-4f9b-4192-b470-e2996142e14e",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            20
+          ],
+          "T_range_K": [
+            300,
+            716
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "Ca-bcc",
+          "spacegroup": 229,
+          "spg_intl": "Im-3m",
+          "mc3d_uuid": "352274fe-21c1-45ad-a8b5-558985296b2a",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            20,
+            400
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Olijnyk 1984"
+          ]
+        },
+        {
+          "label": "Ca-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1115,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Ni": {
+      "Tm_at_1bar_K": 1728,
+      "phases": [
+        {
+          "label": "Ni-fcc",
+          "spacegroup": 225,
+          "spg_intl": "Fm-3m",
+          "mc3d_uuid": "14885fd9-53cc-48dc-9c38-e1088fd871b2",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            300,
+            1728
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "Ni-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1728,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "H": {
+      "Tm_at_1bar_K": 14,
+      "phases": [
+        {
+          "label": "H-hcp",
+          "spacegroup": 194,
+          "spg_intl": "P6_3/mmc",
+          "mc3d_uuid": null,
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            500,
+            4000
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Pickard 2007"
+          ]
+        }
+      ]
+    },
+    "C": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "C-graphite",
+          "spacegroup": 194,
+          "spg_intl": "P6_3/mmc",
+          "mc3d_uuid": "b2af5e64-1a6a-495f-8385-8a2f439feffd",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            15
+          ],
+          "T_range_K": [
+            300,
+            4000
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "C-diamond",
+          "spacegroup": 227,
+          "spg_intl": "Fd-3m",
+          "mc3d_uuid": "f23238bb-5e3e-4beb-9452-7d014e616604",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            15,
+            1000
+          ],
+          "T_range_K": [
+            300,
+            4000
+          ],
+          "refs": [
+            "Bundy 1996"
+          ]
+        },
+        {
+          "label": "C-bc8",
+          "spacegroup": 206,
+          "spg_intl": "Ia-3",
+          "mc3d_uuid": "446a35e7-cdf8-4e64-a112-7abe4e61e7c9",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            1000,
+            4000
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Grumbach 1996"
+          ]
+        }
+      ]
+    },
+    "N": {
+      "Tm_at_1bar_K": 63,
+      "phases": [
+        {
+          "label": "N-cg",
+          "spacegroup": 210,
+          "spg_intl": "F4132",
+          "mc3d_uuid": null,
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            100,
+            4000
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Nellis 1991"
+          ]
+        }
+      ]
+    },
+    "Al": {
+      "Tm_at_1bar_K": 933,
+      "phases": [
+        {
+          "label": "Al-fcc",
+          "spacegroup": 225,
+          "spg_intl": "Fm-3m",
+          "mc3d_uuid": "0df609fe-82bf-4fb4-b112-9302b32d1fd7",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            300,
+            933
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "Al-hcp",
+          "spacegroup": 194,
+          "spg_intl": "P6_3/mmc",
+          "mc3d_uuid": "0e74a746-e2bb-4bc9-b40f-bed908f76df7",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            200,
+            400
+          ],
+          "T_range_K": [
+            300,
+            933
+          ],
+          "refs": [
+            "Akahama 2004"
+          ]
+        },
+        {
+          "label": "Al-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            933,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "He": {
+      "Tm_at_1bar_K": 1,
+      "phases": [
+        {
+          "label": "He-hcp",
+          "spacegroup": 194,
+          "spg_intl": "P6_3/mmc",
+          "mc3d_uuid": "14571129-b100-469c-80d7-c098c624fbae",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            100,
+            4000
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Driessen 1983"
+          ]
+        }
+      ]
+    },
+    "Na": {
+      "Tm_at_1bar_K": 371,
+      "phases": [
+        {
+          "label": "Na-bcc",
+          "spacegroup": 229,
+          "spg_intl": "Im-3m",
+          "mc3d_uuid": "d24b361b-25f3-4839-b9bb-388061796823",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            65
+          ],
+          "T_range_K": [
+            300,
+            371
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "Na-fcc",
+          "spacegroup": 225,
+          "spg_intl": "Fm-3m",
+          "mc3d_uuid": "ab5b6b71-0645-4e5e-8f0a-469638d0fbf1",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            65,
+            200
+          ],
+          "T_range_K": [
+            300,
+            371
+          ],
+          "refs": [
+            "Hanfland 2002"
+          ]
+        },
+        {
+          "label": "Na-cI16",
+          "spacegroup": 206,
+          "spg_intl": "Ia-3",
+          "mc3d_uuid": null,
+          "structure_source": "manual",
+          "P_range_GPa": [
+            200,
+            4000
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Ma 2009"
+          ]
+        },
+        {
+          "label": "Na-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            4000
+          ],
+          "T_range_K": [
+            371,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "P": {
+      "Tm_at_1bar_K": 317,
+      "phases": [
+        {
+          "label": "P-black",
+          "spacegroup": 19,
+          "spg_intl": "P2_12_12_1",
+          "mc3d_uuid": null,
+          "structure_source": "manual",
+          "P_range_GPa": [
+            0,
+            5
+          ],
+          "T_range_K": [
+            300,
+            317
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "P-A7",
+          "spacegroup": 166,
+          "spg_intl": "R-3m",
+          "mc3d_uuid": "51f00f43-e8b2-47df-9af4-c6da4e5da5d7",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            5,
+            100
+          ],
+          "T_range_K": [
+            300,
+            317
+          ],
+          "refs": [
+            "Kikegawa 1983"
+          ]
+        },
+        {
+          "label": "P-Cmcm",
+          "spacegroup": 63,
+          "spg_intl": "Cmcm",
+          "mc3d_uuid": "a037c02f-d7c5-40f4-a304-cf89104c9c3c",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            100,
+            4000
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Kikegawa 1983"
+          ]
+        },
+        {
+          "label": "P-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            4000
+          ],
+          "T_range_K": [
+            317,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "S": {
+      "Tm_at_1bar_K": 388,
+      "phases": [
+        {
+          "label": "S-alpha",
+          "spacegroup": 70,
+          "spg_intl": "Fddd",
+          "mc3d_uuid": "286bea1b-cce8-4e7d-910e-d55e80d8f71c",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            36
+          ],
+          "T_range_K": [
+            300,
+            388
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "S-beta",
+          "spacegroup": 12,
+          "spg_intl": "C2/m",
+          "mc3d_uuid": "9d777271-9285-424a-b4a6-b2efe896fe99",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            36,
+            4000
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Wolf 1984"
+          ]
+        },
+        {
+          "label": "S-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            4000
+          ],
+          "T_range_K": [
+            388,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "K": {
+      "Tm_at_1bar_K": 337,
+      "phases": [
+        {
+          "label": "K-bcc",
+          "spacegroup": 229,
+          "spg_intl": "Im-3m",
+          "mc3d_uuid": "a9208daa-cbf9-4fcf-8f2e-2026e7a7c5b3",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            28
+          ],
+          "T_range_K": [
+            300,
+            337
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "K-fcc",
+          "spacegroup": 225,
+          "spg_intl": "Fm-3m",
+          "mc3d_uuid": "749be717-08e1-49ef-99da-a068b7e17517",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            28,
+            4000
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Hanfland 2002"
+          ]
+        },
+        {
+          "label": "K-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            4000
+          ],
+          "T_range_K": [
+            337,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Ti": {
+      "Tm_at_1bar_K": 1941,
+      "phases": [
+        {
+          "label": "Ti-hcp-alpha",
+          "spacegroup": 194,
+          "spg_intl": "P6_3/mmc",
+          "mc3d_uuid": "ee205876-0947-452a-a940-c8731ed0b55f",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            300,
+            1155
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "Ti-bcc-beta",
+          "spacegroup": 229,
+          "spg_intl": "Im-3m",
+          "mc3d_uuid": "4bc8cff1-92ac-4609-b327-85fe56b13613",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1155,
+            1941
+          ],
+          "refs": [
+            "CRC Handbook"
+          ]
+        },
+        {
+          "label": "Ti-hp",
+          "spacegroup": 191,
+          "spg_intl": "P6/mmm",
+          "mc3d_uuid": "505dd835-ccd2-483e-b93e-70b600118d37",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            115,
+            400
+          ],
+          "T_range_K": [
+            300,
+            1941
+          ],
+          "refs": [
+            "Xia 1990"
+          ]
+        },
+        {
+          "label": "Ti-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1941,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Mg": {
+      "Tm_at_1bar_K": 923,
+      "phases": [
+        {
+          "label": "Mg-hcp",
+          "spacegroup": 194,
+          "spg_intl": "P6_3/mmc",
+          "mc3d_uuid": null,
+          "structure_source": "manual",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            300,
+            923
+          ],
+          "refs": [
+            "Olijnyk & Holzapfel 1984 Phys Lett A 100:405",
+            "Stinton et al. 2014 PRB 90:134105"
+          ]
+        },
+        {
+          "label": "Mg-bcc",
+          "spacegroup": 229,
+          "spg_intl": "Im-3m",
+          "mc3d_uuid": "546a4c0f-b79d-48f6-9c4a-9d2506f5fef3",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            50,
+            400
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Olijnyk & Holzapfel 1984 Phys Lett A 100:405",
+            "Stinton et al. 2014 PRB 90:134105"
+          ]
+        },
+        {
+          "label": "Mg-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            923,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Si": {
+      "Tm_at_1bar_K": 1687,
+      "phases": [
+        {
+          "label": "Si-diamond",
+          "spacegroup": 227,
+          "spg_intl": "Fd-3m",
+          "mc3d_uuid": "a1dd2241-f548-4703-9ff1-c7c1c61edf26",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            12
+          ],
+          "T_range_K": [
+            300,
+            1687
+          ],
+          "refs": [
+            "CRC Handbook",
+            "MC3D mc3d-19925"
+          ]
+        },
+        {
+          "label": "Si-beta-sn",
+          "spacegroup": 141,
+          "spg_intl": "I4_1/amd",
+          "mc3d_uuid": "6f6a0029-1fc4-40f8-89a0-2dd354d430c6",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            12,
+            16
+          ],
+          "T_range_K": [
+            300,
+            1687
+          ],
+          "refs": [
+            "Bundy 1964",
+            "MC3D mc3d-23109 (HP)"
+          ]
+        },
+        {
+          "label": "Si-simple-hex",
+          "spacegroup": 191,
+          "spg_intl": "P6/mmm",
+          "mc3d_uuid": "e0680921-2121-47f5-b5e3-c536835594d8",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            16,
+            42
+          ],
+          "T_range_K": [
+            300,
+            1687
+          ],
+          "refs": [
+            "Bundy 1964",
+            "MC3D mc3d-67106 (HP)"
+          ]
+        },
+        {
+          "label": "Si-Cmcm",
+          "spacegroup": 63,
+          "spg_intl": "Cmcm",
+          "mc3d_uuid": "20d337aa-073f-4f5b-82de-424095771c23",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            38,
+            42
+          ],
+          "T_range_K": [
+            300,
+            1687
+          ],
+          "refs": [
+            "McMahon 1994",
+            "MC3D mc3d-32652"
+          ]
+        },
+        {
+          "label": "Si-hcp",
+          "spacegroup": 194,
+          "spg_intl": "P6_3/mmc",
+          "mc3d_uuid": "c7ea3905-8661-4b02-82df-b198baf8283b",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            42,
+            400
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Bundy 1964",
+            "MC3D mc3d-23122 (HP)"
+          ]
+        },
+        {
+          "label": "Si-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1687,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "O": {
+      "Tm_at_1bar_K": 55,
+      "phases": [
+        {
+          "label": "O-delta",
+          "spacegroup": 69,
+          "spg_intl": "Fmmm",
+          "mc3d_uuid": null,
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            5,
+            8
+          ],
+          "T_range_K": [
+            300,
+            500
+          ],
+          "refs": [
+            "Lundegaard 2006",
+            "MC3D mc3d-35403"
+          ]
+        },
+        {
+          "label": "O-epsilon",
+          "spacegroup": 12,
+          "spg_intl": "C2/m",
+          "mc3d_uuid": null,
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            10,
+            96
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Lundegaard et al. 2006 Nature 443:201",
+            "Weck et al. 2006 PRB 73:094111",
+            "MC3D mc3d-25060 (resolved)"
+          ]
+        },
+        {
+          "label": "O-zeta",
+          "spacegroup": 63,
+          "spg_intl": "Cmcm",
+          "mc3d_uuid": null,
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            96,
+            400
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Lundegaard et al. 2006 Nature 443:201",
+            "Weck et al. 2006 PRB 73:094111",
+            "MC3D mc3d-63426 (resolved)"
+          ]
+        },
+        {
+          "label": "O-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            55,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "MgO": {
+      "Tm_at_1bar_K": 3098,
+      "phases": [
+        {
+          "label": "MgO-B1",
+          "spacegroup": 225,
+          "spg_intl": "Fm-3m",
+          "mc3d_uuid": "0224326b-3369-46a0-bd7f-ad7411201123",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Duffy 1995 JGR",
+            "MC3D mc3d-71422 (ambient)"
+          ]
+        },
+        {
+          "label": "MgO-B2",
+          "spacegroup": 221,
+          "spg_intl": "Pm-3m",
+          "mc3d_uuid": "80dcbbfe-da73-4d8f-a561-d10c486668d5",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            400,
+            600
+          ],
+          "T_range_K": [
+            300,
+            10000
+          ],
+          "refs": [
+            "Oganov, Gillan & Price 2003 J Chem Phys 118:10149",
+            "Coppari et al. 2013 Nature Geosci 6:926"
+          ]
+        },
+        {
+          "label": "MgO-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            3098,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "SiO2": {
+      "Tm_at_1bar_K": 2000,
+      "phases": [
+        {
+          "label": "SiO2-quartz",
+          "spacegroup": 154,
+          "spg_intl": "P3_221",
+          "mc3d_uuid": "7fbf47d6-110b-47a9-9151-b2d71f9e15e2",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            3
+          ],
+          "T_range_K": [
+            300,
+            2000
+          ],
+          "refs": [
+            "Boyd & England 1960 Geochim Cosmochim Acta 19:329",
+            "Stishov 1961",
+            "MC3D mc3d-1166 (resolved)"
+          ]
+        },
+        {
+          "label": "SiO2-coesite",
+          "spacegroup": 15,
+          "spg_intl": "C2/c",
+          "mc3d_uuid": "9a3b315f-9241-47f6-88b8-734d492321da",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            3,
+            9
+          ],
+          "T_range_K": [
+            300,
+            2000
+          ],
+          "refs": [
+            "Coes 1953 Science 118:131",
+            "Stishov & Popova 1961 Geokhimiya 10:837",
+            "MC3D mc3d-2498 (resolved)"
+          ]
+        },
+        {
+          "label": "SiO2-stishovite",
+          "spacegroup": 136,
+          "spg_intl": "P4_2/mnm",
+          "mc3d_uuid": "1dfa1260-03db-4a27-a6ff-f60141fba49a",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            9,
+            50
+          ],
+          "T_range_K": [
+            300,
+            3000
+          ],
+          "refs": [
+            "Stishov & Popova 1961 Geokhimiya 10:837",
+            "Tsuchiya 2004 GRL 31:L11610"
+          ]
+        },
+        {
+          "label": "SiO2-CaCl2",
+          "spacegroup": 58,
+          "spg_intl": "Pnnm",
+          "mc3d_uuid": null,
+          "structure_source": "manual",
+          "P_range_GPa": [
+            50,
+            100
+          ],
+          "T_range_K": [
+            300,
+            3000
+          ],
+          "refs": [
+            "Tsuchiya T, Caracas R, Tsuchiya J 2004 GRL 31:L11610",
+            "Oganov, Gillan & Price 2005 PRB 71:064104"
+          ]
+        },
+        {
+          "label": "SiO2-alphaPbO2",
+          "spacegroup": 60,
+          "spg_intl": "Pbcn",
+          "mc3d_uuid": "33b3a016-a71e-4f5a-991a-d523372ac3b1",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            100,
+            200
+          ],
+          "T_range_K": [
+            300,
+            3000
+          ],
+          "refs": [
+            "Murakami 2003",
+            "Dubrovinsky et al. 1997 Nature 388:362",
+            "Tsuchiya 2004 GRL 31:L11610",
+            "MC3D mc3d-37307 (resolved)"
+          ]
+        },
+        {
+          "label": "SiO2-pyrite",
+          "spacegroup": 205,
+          "spg_intl": "Pa-3",
+          "mc3d_uuid": "b547b4b9-5c97-440a-a659-dd1e4f782f86",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            200,
+            640
+          ],
+          "T_range_K": [
+            300,
+            3000
+          ],
+          "refs": [
+            "Kuwayama et al. 2005 Science 309:923",
+            "Tsuchiya J & Tsuchiya T 2011 PNAS 108:1252 (DOI 10.1073/pnas.1013594108)"
+          ]
+        },
+        {
+          "label": "SiO2-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            2000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "MgSiO3": {
+      "Tm_at_1bar_K": 1850,
+      "phases": [
+        {
+          "label": "MgSiO3-enstatite",
+          "spacegroup": 15,
+          "spg_intl": "C2/c",
+          "mc3d_uuid": "1be28aef-fdc5-4f31-a16f-0e449c2f2881",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            16
+          ],
+          "T_range_K": [
+            300,
+            2000
+          ],
+          "refs": [
+            "Presnall & Gasparik 1990 JGR 95:15751",
+            "Gasparik 1990 JGR 95:15751"
+          ]
+        },
+        {
+          "label": "MgSiO3-majorite",
+          "spacegroup": 230,
+          "spg_intl": "Ia-3d",
+          "mc3d_uuid": null,
+          "structure_source": "manual",
+          "P_range_GPa": [
+            16,
+            22
+          ],
+          "T_range_K": [
+            1000,
+            2500
+          ],
+          "refs": [
+            "Gasparik 1990 JGR 95:15751",
+            "Hirose et al. 2001 PEPI 124:1"
+          ]
+        },
+        {
+          "label": "MgSiO3-akimotoite",
+          "spacegroup": 148,
+          "spg_intl": "R-3",
+          "mc3d_uuid": "84b52f03-51c3-455e-a46d-82d25ba1e35f",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            21,
+            24
+          ],
+          "T_range_K": [
+            1000,
+            2200
+          ],
+          "refs": [
+            "Kato 1996",
+            "Hirose et al. 2001 PEPI 124:1"
+          ]
+        },
+        {
+          "label": "MgSiO3-bridgmanite",
+          "spacegroup": 62,
+          "spg_intl": "Pnma",
+          "mc3d_uuid": "b6d5c782-874c-4d42-bc49-1c2ebba346ee",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            23,
+            125
+          ],
+          "T_range_K": [
+            1500,
+            4000
+          ],
+          "refs": [
+            "Liu 1975 Nature 258:755",
+            "Knittle & Jeanloz 1987 Nature 319:214"
+          ]
+        },
+        {
+          "label": "MgSiO3-postperovskite",
+          "spacegroup": 63,
+          "spg_intl": "Cmcm",
+          "mc3d_uuid": "187a30fa-c8af-4651-9bad-27a6da7b3271",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            125,
+            400
+          ],
+          "T_range_K": [
+            2500,
+            5000
+          ],
+          "refs": [
+            "Murakami et al. 2004 Science 304:1465",
+            "Tsuchiya T, Tsuchiya J, Umemoto K, Wentzcovitch 2004 EPSL 224:241"
+          ]
+        },
+        {
+          "label": "MgSiO3-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1850,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Mg2SiO4": {
+      "Tm_at_1bar_K": 2163,
+      "phases": [
+        {
+          "label": "Mg2SiO4-forsterite",
+          "spacegroup": 62,
+          "spg_intl": "Pnma",
+          "mc3d_uuid": "3aea2c82-de67-449e-98fa-5e7fb9a5681d",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            13
+          ],
+          "T_range_K": [
+            300,
+            2000
+          ],
+          "refs": [
+            "Katsura & Ito 1989 Phys Earth Planet Inter 99:414",
+            "Boyd 1964"
+          ]
+        },
+        {
+          "label": "Mg2SiO4-wadsleyite",
+          "spacegroup": 74,
+          "spg_intl": "Imma",
+          "mc3d_uuid": "30b2bfd9-8066-40c1-b860-4daba0059135",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            13,
+            18
+          ],
+          "T_range_K": [
+            500,
+            2000
+          ],
+          "refs": [
+            "Katsura & Ito 1989 PEPI 99:414",
+            "Ringwood 1975",
+            "MC3D mc3d-22531 (resolved)"
+          ]
+        },
+        {
+          "label": "Mg2SiO4-ringwoodite",
+          "spacegroup": 227,
+          "spg_intl": "Fd-3m",
+          "mc3d_uuid": "2644d962-2e28-4c03-8b01-9ce5f0414476",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            18,
+            23
+          ],
+          "T_range_K": [
+            800,
+            2200
+          ],
+          "refs": [
+            "Katsura & Ito 1989 PEPI 99:414",
+            "Akaogi 1984"
+          ]
+        },
+        {
+          "label": "Mg2SiO4-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            2163,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Mg2Si": {
+      "Tm_at_1bar_K": 1358,
+      "phases": [
+        {
+          "label": "Mg2Si-antifluorite",
+          "spacegroup": 225,
+          "spg_intl": "Fm-3m",
+          "mc3d_uuid": "528e702d-99b5-4ef2-ad0e-7ed86a73b3a5",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            10
+          ],
+          "T_range_K": [
+            300,
+            1358
+          ],
+          "refs": [
+            "CRC Handbook",
+            "MC3D mc3d-35349 (ambient)"
+          ]
+        },
+        {
+          "label": "Mg2Si-Pnma",
+          "spacegroup": 62,
+          "spg_intl": "Pnma",
+          "mc3d_uuid": "7184feb2-8c36-4b0f-a0b5-58283d7c87bf",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            10,
+            100
+          ],
+          "T_range_K": [
+            300,
+            2000
+          ],
+          "refs": [
+            "Cui 2012 (HP phase transition)",
+            "MC3D mc3d-45512 (HP)"
+          ]
+        },
+        {
+          "label": "Mg2Si-hcp",
+          "spacegroup": 194,
+          "spg_intl": "P6_3/mmc",
+          "mc3d_uuid": "a3556b71-a1ac-40b4-bced-1d4796b9067b",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            100,
+            400
+          ],
+          "T_range_K": [
+            300,
+            5000
+          ],
+          "refs": [
+            "MC3D mc3d-69826 (theoretical)",
+            "TODO: 待人工复核 P/T range"
+          ]
+        },
+        {
+          "label": "Mg2Si-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1358,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "MgSi2": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "MgSi2-Imma",
+          "spacegroup": 74,
+          "spg_intl": "Imma",
+          "mc3d_uuid": "6f81d7d7-9716-4cdc-9b0d-87c07606af37",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            300,
+            1500
+          ],
+          "refs": [
+            "MC3D mc3d-48589 (ambient)",
+            "TODO: 待人工复核 — P/T range estimated"
+          ]
+        },
+        {
+          "label": "MgSi2-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Mg5Si3": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "Mg5Si3-hexagonal",
+          "spacegroup": 193,
+          "spg_intl": "P6_3/mcm",
+          "mc3d_uuid": null,
+          "structure_source": "manual",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            300,
+            1500
+          ],
+          "refs": [
+            "TODO: 待人工复核 — Mn5Si3-type structure, not found in MC3D; P6_3/mcm from literature"
+          ]
+        },
+        {
+          "label": "Mg5Si3-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "MgO2": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "MgO2-pyrite",
+          "spacegroup": 205,
+          "spg_intl": "Pa-3",
+          "mc3d_uuid": "4ae1cf88-ce23-4b91-a371-1cb5f6cb85ea",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            100
+          ],
+          "T_range_K": [
+            300,
+            1000
+          ],
+          "refs": [
+            "MC3D mc3d-36507 (ambient)",
+            "TODO: 待人工复核 — P/T range estimated; MgO2 stable at high P from MgO + 1/2 O2"
+          ]
+        },
+        {
+          "label": "MgO2-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "SiO": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "SiO-zincblende",
+          "spacegroup": 216,
+          "spg_intl": "F-43m",
+          "mc3d_uuid": "9c4ad7a7-eec1-4173-b71c-5a2810b71ce7",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            300,
+            1000
+          ],
+          "refs": [
+            "MC3D mc3d-9352 (ambient)",
+            "TODO: SiO metastable w.r.t. Si+SiO2 at all P"
+          ]
+        },
+        {
+          "label": "SiO-Cm",
+          "spacegroup": 8,
+          "spg_intl": "Cm",
+          "mc3d_uuid": null,
+          "structure_source": "manual",
+          "P_range_GPa": [
+            0,
+            20
+          ],
+          "T_range_K": [
+            300,
+            1000
+          ],
+          "refs": [
+            "AlKaabi 2014 JACS 136, 3410",
+            "TODO: predicted ground state, metastable; not in MC3D"
+          ]
+        },
+        {
+          "label": "SiO-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Mg4Si7": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "Mg4Si7-C2m",
+          "spacegroup": 12,
+          "spg_intl": "C2/m",
+          "mc3d_uuid": "751a0e76-5847-4f40-a666-ca1d981d79f5",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            300,
+            2000
+          ],
+          "refs": [
+            "MC3D mc3d-24629, mc3d-76285 (ambient)",
+            "TODO: 待人工复核 — P/T range estimated"
+          ]
+        },
+        {
+          "label": "Mg4Si7-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Mg5Si6": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "Mg5Si6-C2m",
+          "spacegroup": 12,
+          "spg_intl": "C2/m",
+          "mc3d_uuid": "7b1a827a-293e-4508-a33c-de4fa4e1a0e3",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            300,
+            2000
+          ],
+          "refs": [
+            "MC3D mc3d-63829 (ambient)",
+            "TODO: 待人工复核 — P/T range estimated"
+          ]
+        },
+        {
+          "label": "Mg5Si6-Cm",
+          "spacegroup": 8,
+          "spg_intl": "Cm",
+          "mc3d_uuid": "9d1c436d-ccc0-4e6a-9617-fefef0e9fdcd",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            300,
+            2000
+          ],
+          "refs": [
+            "MC3D mc3d-86335, mc3d-86336 (ambient)",
+            "TODO: 待人工复核 — P/T range estimated"
+          ]
+        },
+        {
+          "label": "Mg5Si6-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Mg9Si5": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "Mg9Si5-P63m",
+          "spacegroup": 176,
+          "spg_intl": "P6_3/m",
+          "mc3d_uuid": "9e19037c-472e-4505-aa93-708f94f8dfd7",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            300,
+            2000
+          ],
+          "refs": [
+            "MC3D mc3d-37099 (ambient)",
+            "TODO: 待人工复核 — P/T range estimated"
+          ]
+        },
+        {
+          "label": "Mg9Si5-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "MgSi2O5": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "MgSi2O5-P21c",
+          "spacegroup": 14,
+          "spg_intl": "P2_1/c",
+          "mc3d_uuid": "709c9dfa-07f7-42fe-90ab-e8360eb124b0",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            50,
+            400
+          ],
+          "T_range_K": [
+            300,
+            3000
+          ],
+          "refs": [
+            "MC3D mc3d-59750 (theoretical, HP)",
+            "TODO: 待人工复核 — HP phase, P/T range estimated"
+          ]
+        },
+        {
+          "label": "MgSi2O5-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    },
+    "Mg3Si2O9": {
+      "Tm_at_1bar_K": null,
+      "phases": [
+        {
+          "label": "Mg3Si2O9-P31m",
+          "spacegroup": 157,
+          "spg_intl": "P31m",
+          "mc3d_uuid": "0f59d4fc-730e-4c6d-87f8-cef0b125e994",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            1000,
+            5000
+          ],
+          "refs": [
+            "MC3D mc3d-84690 (HT)",
+            "TODO: 待人工复核 — HT phase, P/T range estimated"
+          ]
+        },
+        {
+          "label": "Mg3Si2O9-P63cm",
+          "spacegroup": 185,
+          "spg_intl": "P6_3cm",
+          "mc3d_uuid": "891def71-1e02-4e8b-9a7f-d4f7e1b82cc4",
+          "structure_source": "mc3d",
+          "P_range_GPa": [
+            0,
+            50
+          ],
+          "T_range_K": [
+            1000,
+            5000
+          ],
+          "refs": [
+            "MC3D mc3d-84691 (HT)",
+            "TODO: 待人工复核 — HT phase, P/T range estimated"
+          ]
+        },
+        {
+          "label": "Mg3Si2O9-LIQ",
+          "spacegroup": null,
+          "spg_intl": null,
+          "mc3d_uuid": null,
+          "structure_source": "from_aimd_contcar",
+          "P_range_GPa": [
+            0,
+            400
+          ],
+          "T_range_K": [
+            1000,
+            10000
+          ],
+          "refs": []
+        }
+      ]
+    }
+  }
+}

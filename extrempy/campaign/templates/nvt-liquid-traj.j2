@@ -16,7 +16,7 @@ variable        T equal {{temperature | default('300')}}
 variable        T2 equal {{high_temperature | default('2000')}}
 variable	    p equal {{pressure | default('0.0001')}}*10000
 
-pair_style      deepmd cp.pb fparam ${T}
+pair_style      deepmd {{ model_name | default('cp.pb') }} fparam ${T}
 pair_coeff      * *
 
 {% for element in elements %}
@@ -36,9 +36,9 @@ thermo_style    custom step time temp press vol density etotal
 
 variable     	y equal ${T2}
 
-velocity       	all create $y 8341 dist gaussian rot yes
+velocity       	all create $y {{ seed | default('8341') }} dist gaussian rot yes
 fix             1 all npt temp ${T2} ${T2} 0.1 aniso $p $p 0.5
-run            	10000
+run            	20000
 unfix           1
 
 fix             1 all npt temp ${T} ${T} 0.1 aniso $p $p 0.5

@@ -1,0 +1,60 @@
+# DS v4 Flash Literature Mining Targets
+
+# 每个条目是一次 DS v4 Flash 调研任务
+# 用 prompts/phase_boundary.md 模板，把 {{FORMULA}} 替换为下面的值
+
+# ── Mg-Si-O 体系（已有骨架，需精修）──
+targets:
+  - formula: "MgO"
+    prompt: phase_boundary.md
+    notes: "已有 3 相骨架（B1, B2, LIQ），需验证 B1→B2 边界和液相线"
+
+  - formula: "SiO2"
+    prompt: phase_boundary.md
+    notes: "已有 5 相骨架，需验证 stishovite→CaCl2→α-PbO2→pyrite 序列"
+
+  - formula: "MgSiO3"
+    prompt: phase_boundary.md
+    notes: "已有 6 相骨架，重点验证 bridgmanite→post-perovskite 边界 (~125 GPa)"
+
+  - formula: "Mg2SiO4"
+    prompt: phase_boundary.md
+    notes: "已有 4 相骨架，需验证 forsterite→wadsleyite→ringwoodite 边界"
+
+# ── 16 元素单质（需补充高压相）──
+  - formula: "Fe"
+    prompt: phase_boundary.md
+    notes: "重点：hcp-Fe 在内核的稳定性，bcc vs hcp 争议"
+
+  - formula: "Si"
+    prompt: phase_boundary.md
+    notes: "高压金属化转变"
+
+  - formula: "O"
+    prompt: phase_boundary.md
+    notes: "ε-O 和 ζ-O 相边界"
+
+  - formula: "C"
+    prompt: phase_boundary.md
+    notes: "diamond→bc8 转变，内核碳的存在形式"
+
+  - formula: "H"
+    prompt: phase_boundary.md
+    notes: "金属氢转变压力，化合物中的氢"
+
+# ── 后续扩展化合物（等 Mg-Si-O 验证后启动）──
+  # - formula: "FeO"
+  #   prompt: phase_boundary.md
+  #   notes: "B1→B8 转变，下地幔 ferropericlase"
+  #
+  # - formula: "Fe2SiO4"
+  #   prompt: phase_boundary.md
+  #   notes: "fayalite，Fe 端元的橄榄石"
+  #
+  # - formula: "CaSiO3"
+  #   prompt: phase_boundary.md
+  #   notes: "Ca-perovskite，下地幔第三主要相"
+  #
+  # - formula: "Al2O3"
+  #   prompt: phase_boundary.md
+  #   notes: "corundum，高压下的结构"

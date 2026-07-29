@@ -5,3 +5,6 @@ CLAUDE.md
 .claude
 .vscode
 .ipynb_checkpoints/
+
+# DS v4 Flash literature mining raw outputs (large, ephemeral)
+extrempy/data/literature_mining/raw_outputs/

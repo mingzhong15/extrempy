@@ -11,9 +11,13 @@ from unittest.mock import MagicMock
 
 def setup_mocks():
     """Set up sys.modules mocks for all heavy dependencies."""
-    # numpy: needs arbitrary attributes (pi, ones, ...)
-    sys.modules['numpy'] = MagicMock()
-    sys.modules['numpy'].__path__ = []
+    # numpy: use real if available, mock only as fallback.
+    # Some tests (e.g. _generate_press_grid_for_phase) need real np.logspace.
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        sys.modules['numpy'] = MagicMock()
+        sys.modules['numpy'].__path__ = []
 
     # matplotlib
     sys.modules['matplotlib'] = types.ModuleType('matplotlib')

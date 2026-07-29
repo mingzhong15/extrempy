@@ -149,8 +149,9 @@ class EOSCalculator(ABC):
           2. ``self.dpgen_dir`` (element-internal DPGEN dir, i.e.
              ``{work_root}/{element}/dpgen`` — consistent with
              :class:`DPBuilder.dpgen_dir`) →
-             a. ``{dpgen_dir}/frozen_model*.pb`` at root
-             b. ``{dpgen_dir}/iter.*/00.train/000/frozen_model*.pb``
+             a. ``{dpgen_dir}/cp.pb`` (05.dptrain flat layout)
+             b. ``{dpgen_dir}/frozen_model*.pb`` at root
+             c. ``{dpgen_dir}/iter.*/00.train/000/frozen_model*.pb``
         """
         if self.dp_model_path:
             if not os.path.exists(self.dp_model_path):
@@ -159,12 +160,16 @@ class EOSCalculator(ABC):
             return self.dp_model_path
 
         if self.dpgen_dir:
-            # 1. frozen_model*.pb at dpgen_dir root
+            # 1. cp.pb at dpgen_dir root (05.dptrain flat layout)
+            p = os.path.join(self.dpgen_dir, 'cp.pb')
+            if os.path.exists(p):
+                return p
+            # 2. frozen_model*.pb at dpgen_dir root (01.sample DPGEN)
             for name in ['frozen_model_compressed.pb', 'frozen_model.pb']:
                 p = os.path.join(self.dpgen_dir, name)
                 if os.path.exists(p):
                     return p
-            # 2. glob iter.*/00.train/000/
+            # 3. glob iter.*/00.train/000/
             for name in ['frozen_model_compressed.pb', 'frozen_model.pb']:
                 files = sorted(glob.glob(
                     os.path.join(self.dpgen_dir,
@@ -285,6 +290,104 @@ class EOSCalculator(ABC):
         offsets = np.arange(npt_n) - half
         temps = Tm + offsets * npt_dT + npt_shift
         return [int(t) for t in temps if t >= 250]
+
+    def _get_eos_temp_ladder(self, phase='solid', n=10,
+                             t_min=None, t_max_factor=None):
+        """Return an EOS temperature ladder spanning a wide T range.
+
+        Designed for full EOS scans (300 K → beyond Tm) rather than the
+        narrow Tm-centered :meth:`_get_npt_temps`.  Solid and liquid
+        phases overlap around Tm so the two branches can be cross-checked
+        (densities / volumes should match near Tm).
+
+        Parameters
+        ----------
+        phase : {'solid', 'liquid'}
+            ``solid``  → ``t_min`` (default ``max(300, 0.15*Tm)``) up to
+            ``t_max_factor*Tm`` (default 1.4); deliberately extends past
+            Tm so the superheated solid branch can be compared with the
+            liquid branch.
+            ``liquid`` → ``t_min`` (default ``0.8*Tm``) up to
+            ``t_max_factor*Tm`` (default 2.0); extends below Tm so the
+            undercooled liquid branch is sampled too.
+        n : int
+            Number of temperature points (linspace).
+        t_min : float or None
+            Explicit lower bound (K).  Overrides the phase default.
+        t_max_factor : float or None
+            Explicit upper bound as a fraction of Tm.  Overrides the
+            phase default.
+
+        Returns
+        -------
+        list of int
+            Sorted unique temperatures (rounded to the nearest K).
+        """
+        Tm = self._get_tm_for_run()
+        if t_max_factor is None:
+            t_max_factor = 1.4 if phase == 'solid' else 2.0
+        t_max = int(round(t_max_factor * Tm))
+        if t_min is None:
+            if phase == 'solid':
+                t_min = max(300, int(round(0.15 * Tm)))
+            else:
+                t_min = int(round(0.8 * Tm))
+        if t_min >= t_max:
+            t_min = max(250, t_max - 100)
+        temps = np.linspace(t_min, t_max, n)
+        return sorted({int(round(t)) for t in temps})
+
+    def _get_cubic_supercell(self, poscar_path, target_atoms=9000,
+                             target_length=55.0):
+        """Choose ``(nx, ny, nz)`` so the simulation box is near-cubic.
+
+        Reads the unit-cell lengths from the POSCAR and picks a
+        per-axis replication count so that ``nx*lx ≈ ny*ly ≈ nz*lz``
+        (all close to ``target_length``).  This matters for non-cubic
+        cells (e.g. HCP, where a 5×5×5 replication of the conventional
+        cell gives a long, thin box) and is a no-op for cubic cells
+        (FCC/BCC conventional cells already give a cubic box for any
+        equal replication).
+
+        The result is then nudged toward ``target_atoms``: if the first
+        guess is far from the target atom count, ``target_length`` is
+        rescaled and the per-axis counts recomputed once.
+
+        Parameters
+        ----------
+        poscar_path : str
+        target_atoms : int
+            Desired total atom count.  Used only to rescale the box if
+            the first guess is off by more than 2×.
+        target_length : float
+            Initial guess for the box side (Å).  55 Å is a reasonable
+            default that yields ~9000-12000 atoms for most metals.
+        """
+        atoms = ase.io.read(poscar_path, format='vasp')
+        cell = atoms.cell.cellpar()  # a, b, c, alpha, beta, gamma
+        a, b, c = cell[:3]
+
+        def _counts(L):
+            nx = max(1, int(round(L / a)))
+            ny = max(1, int(round(L / b)))
+            nz = max(1, int(round(L / c)))
+            return nx, ny, nz
+
+        nx, ny, nz = _counts(target_length)
+        natoms_uc = len(atoms)
+        natoms = natoms_uc * nx * ny * nz
+
+        if natoms > 0 and (natoms > 2 * target_atoms
+                           or natoms * 2 < target_atoms):
+            ratio = (target_atoms / natoms) ** (1 / 3)
+            L2 = target_length * ratio
+            nx, ny, nz = _counts(L2)
+            natoms = natoms_uc * nx * ny * nz
+
+        lx, ly, lz = nx * a, ny * b, nz * c
+        print(f'[{self.element}] Cubic supercell : {nx}x{ny}x{nz} '
+              f'→ box {lx:.1f}x{ly:.1f}x{lz:.1f} Å, {natoms} atoms')
+        return (nx, ny, nz)
 
     # ---- paths --------------------------------------------------------------
 
@@ -443,15 +546,24 @@ class EOSCalculator(ABC):
 
     def _submit_slurm_job(self, gen, job_name, submit=True,
                           needs_traj_dir=False):
-        """Write sbatch -> optionally submit."""
+        """Write sbatch -> optionally submit.
+
+        Tolerates QOS-limit failures (``sbatch`` returns non-zero when
+        the user's pending-job quota is exceeded).  The caller is
+        expected to re-run later to fill the missing slots.
+        """
         cfg = self._resolve_slurm_config()
         self._write_sbatch(cfg, job_name, gen.work_path,
                            needs_traj_dir=needs_traj_dir)
         if submit:
-            subprocess.run(
-                ['sbatch', 'job.sbatch'],
-                cwd=gen.work_path,
-                check=True)
+            try:
+                subprocess.run(
+                    ['sbatch', 'job.sbatch'],
+                    cwd=gen.work_path,
+                    check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print(f'  WARN: sbatch failed for {job_name}: '
+                      f'{e.stderr.strip()[:120]}')
 
     # ---- Phase 1: two-phase melt determination ------------------------------
 
@@ -461,7 +573,7 @@ class EOSCalculator(ABC):
                            two_phase_delta=100, two_phase_count=3,
                            equil_steps=100000, heat_steps=10000,
                            dt=0.001, pressure=0.0001, Q_cutoff=3.0,
-                           liquid_superheat=1.9):
+                           liquid_superheat=1.9, seed=None):
         """Generate two-phase LAMMPS inputs at candidate temperatures."""
         Tm = self._get_tm()
 
@@ -477,6 +589,8 @@ class EOSCalculator(ABC):
 
         poscar = self._find_poscar('solid_rt')
         pot = self._find_pot()
+        model_ext = os.path.splitext(pot)[1] or '.pb'
+        model_name = f'cp{model_ext}'
 
         _nx, _ny, _nz = supercell
         self._get_natoms(poscar, _nx, _ny, _nz)
@@ -487,7 +601,8 @@ class EOSCalculator(ABC):
             heating_step=heat_steps,
             equilibrate_step=equil_steps,
             nx=_nx, ny=_ny,
-            nz=_nz)
+            nz=_nz,
+            model_name=model_name)
 
         self._two_phase_gens = []
         for T_est in temps:
@@ -498,7 +613,8 @@ class EOSCalculator(ABC):
             gen.update(dict(
                 base,
                 Tm_estimate=T_est,
-                T_superheat=int(liquid_superheat * Tm)))
+                T_superheat=int(liquid_superheat * Tm),
+                seed=self._derive_seed(T_est, 'twophase', seed)))
             gen.render()
             self._two_phase_gens.append(gen)
 
@@ -573,56 +689,98 @@ class EOSCalculator(ABC):
                      liquid_superheat=1.9,
                      equil_steps=100000, dt=0.001, pressure=0.0001,
                      output_internal=False,
-                     latt_temp_list=None):
+                     latt_temp_list=None,
+                     seed=None):
         """Generate NPT LAMMPS inputs at multiple temperatures.
 
         Parameters
         ----------
+        supercell : tuple or 'auto'
+            ``(nx, ny, nz)`` replication counts, or ``'auto'`` to pick a
+            near-cubic box of ~9000 atoms via :meth:`_get_cubic_supercell`
+            (per-phase, since solid and liquid POSCARs may differ).
         output_internal : bool
             When True, use entropy-enabled templates that output internal
             energy (U = F + T*S) via ``out_internal_energy`` pair_style
             keyword, plus ``ele_entropy`` and ``free_energy`` computes.
-        latt_temp_list : list of int, optional
-            Explicit temperature series.  When given, ``npt_n`` / ``npt_dT`` /
-            ``npt_shift`` are ignored.  Default series is centered on Tm
-            (``npt_shift=0``), spanning roughly ``Tm ± npt_dT*npt_n/2``.
+        latt_temp_list : list or dict, optional
+            Explicit temperature series.  Accepts:
+
+            * **flat list** — same temperatures used for every phase
+              (backward compatible).
+            * **dict** ``{phase: [temps]}`` — per-phase ladder, e.g.
+              ``{'solid': [...], 'liquid': [...]}``.  Phases not in the
+              dict fall back to :meth:`_get_npt_temps`.
+
+            When ``None``, the Tm-centered :meth:`_get_npt_temps` is
+            used.  For a wide EOS scan (300 K → beyond Tm) prefer
+            :meth:`_get_eos_temp_ladder` and pass a dict here.
+        seed : int or None
+            Random seed for the LAMMPS ``velocity create`` command.
+            When ``None`` (default), a deterministic per-job seed is
+            derived from ``(element, T, phase)`` so re-runs reproduce;
+            pass an explicit int to override.
+
+        Notes
+        -----
+        Each generated job gets its own velocity seed (derived from
+        ``seed`` if set, else from a hash of element/T/phase) so the
+        temperature series is statistically independent — the previous
+        behavior of a single fixed ``8341`` seed for all jobs gave
+        correlated initial conditions and made error-bar estimation
+        impossible.
         """
-        temps = latt_temp_list if latt_temp_list is not None \
-            else self._get_npt_temps(npt_n, npt_dT, npt_shift)
-        print(f'[{self.element}] NPT temperature series : {temps}')
         pot = self._find_pot()
-
-        _nx, _ny, _nz = supercell
-
-        base = self._base_params(dt=dt, pressure=pressure)
-        base.update(
-            equilibrate_step=equil_steps,
-            nx=_nx, ny=_ny,
-            nz=_nz)
+        model_ext = os.path.splitext(pot)[1] or '.pb'
+        model_name = f'cp{model_ext}'
 
         self._npt_gens = []
         for phase in phases:
             poscar = (self._find_poscar('liquid') if phase == 'liquid'
                       else self._find_poscar('solid_rt'))
-            # Print atom counts once per phase (per-phase POSCAR may differ).
-            self._get_natoms(poscar, _nx, _ny, _nz)
+
+            # Resolve per-phase temperature ladder.
+            if isinstance(latt_temp_list, dict):
+                temps = latt_temp_list.get(phase)
+                if temps is None:
+                    temps = self._get_npt_temps(npt_n, npt_dT, npt_shift)
+            elif latt_temp_list is not None:
+                temps = list(latt_temp_list)
+            else:
+                temps = self._get_npt_temps(npt_n, npt_dT, npt_shift)
+            print(f'[{self.element}/{phase}] NPT temps : {temps}')
+
+            # Resolve per-phase supercell (POSCARs may differ).
+            if supercell == 'auto':
+                _nx, _ny, _nz = self._get_cubic_supercell(poscar)
+            else:
+                _nx, _ny, _nz = supercell
+            natoms_total = self._get_natoms(poscar, _nx, _ny, _nz)
+
             if output_internal:
                 template = ('npt-entropy-liquid.j2' if phase == 'liquid'
                             else 'npt-entropy-solid.j2')
             else:
                 template = ('npt-liquid.j2' if phase == 'liquid'
                             else 'npt-solid.j2')
+
+            base = self._base_params(dt=dt, pressure=pressure)
+            base.update(
+                equilibrate_step=equil_steps,
+                nx=_nx, ny=_ny,
+                nz=_nz,
+                model_name=model_name)
+
             for T in temps:
                 work_dir = os.path.join(
                     self.npt_dir, f'{T}k{self._tag}_{phase}')
                 os.makedirs(work_dir, exist_ok=True)
                 gen = self._build_gen(work_dir, template)
                 gen.get_files(poscar_path=poscar, pot_path=pot)
-                params = dict(base, temperature=T, phase=phase)
+                params = dict(base, temperature=T, phase=phase,
+                              natoms=natoms_total)
                 params['is_dump'] = False   # explicit & symmetric
-                if output_internal:
-                    model_ext = os.path.splitext(pot)[1] or '.pb'
-                    params['model_name'] = f'cp{model_ext}'
+                params['seed'] = self._derive_seed(T, phase, seed)
                 if phase == 'liquid':
                     Tm = self._get_tm_for_run()
                     params['high_temperature'] = int(
@@ -631,15 +789,32 @@ class EOSCalculator(ABC):
                 gen.render()
                 self._npt_gens.append(gen)
 
+    def _derive_seed(self, T, phase, base_seed=None):
+        """Return a per-job LAMMPS velocity seed.
+
+        When ``base_seed`` is given, mix it with (T, phase); otherwise
+        derive a deterministic seed from (element, T, phase) so re-runs
+        of the same job reproduce while different jobs stay independent.
+        """
+        import hashlib
+        key = f'{self.element}-{T}-{phase}'
+        if base_seed is not None:
+            key = f'{base_seed}-{key}'
+        h = int(hashlib.md5(key.encode()).hexdigest(), 16)
+        return int(h % 100000)
+
     def submit_npt(self, submit=True):
-        for gen in getattr(self, '_npt_gens', []):
+        gens = getattr(self, '_npt_gens', [])
+        if not gens:
+            gens = self._discover_npt_dirs()
+        for gen in gens:
             T = gen.params.get('temperature')
             phase = gen.params.get('phase', 'solid')
             job_name = f'{self.element}{self._tag}_{T}k_npt_{phase}'
             self._submit_slurm_job(gen, job_name, submit=submit,
                                    needs_traj_dir=False)
 
-    def analyze_npt(self):
+    def analyze_npt(self, reload=False):
         """Read each ``thermo.dat`` and return a summary DataFrame.
 
         Columns include temperature, phase, ``element``, ``structure``
@@ -651,12 +826,25 @@ class EOSCalculator(ABC):
         The ``element`` / ``structure`` / ``phase_label`` columns let
         you tell apart HCP vs BCC results when both are run for the same
         element.
+
+        Parameters
+        ----------
+        reload : bool
+            When True (or when ``_npt_gens`` is empty), scan
+            ``self.npt_dir`` on disk for ``{T}k{tag}_{phase}/thermo.dat``
+            files instead of relying on the in-memory generator list.
+            This lets you analyze results in a fresh session after the
+            jobs have finished.
         """
         import pandas as pd
         from extrempy.md.thermo import read_thermo_dat
 
+        gens = getattr(self, '_npt_gens', [])
+        if reload or not gens:
+            gens = self._discover_npt_dirs()
+
         rows = []
-        for gen in getattr(self, '_npt_gens', []):
+        for gen in gens:
             T = gen.params.get('temperature')
             phase = gen.params.get('phase', 'solid')
             thermo_file = os.path.join(gen.work_path, 'thermo.dat')
@@ -671,14 +859,44 @@ class EOSCalculator(ABC):
                 'element': self.element,
                 'structure': self.structure,
                 'phase_label': self.phase_label or self.structure,
+                'natoms': gen.params.get('natoms'),
             }
             for col, stats in averages.items():
                 row[f'{col}_mean'] = stats['mean']
+                row[f'{col}_std'] = stats['std']
             rows.append(row)
         df = pd.DataFrame(rows)
         if not df.empty:
             df = df.sort_values('temperature').reset_index(drop=True)
         return df
+
+    def _discover_npt_dirs(self):
+        """Reconstruct pseudo-gens from ``npt_dir`` on disk.
+
+        Scans for ``{T}k{tag}_{phase}/`` directories that contain a
+        ``run.in`` (i.e. were generated by :meth:`generate_npt`).
+        Returns a list of lightweight objects exposing ``work_path``
+        and ``params`` (with at least ``temperature`` and ``phase``),
+        suitable for :meth:`analyze_npt` and :meth:`submit_npt`.
+        """
+        import re
+        if not os.path.isdir(self.npt_dir):
+            return []
+        # {T}k{_tag or ''}_{phase}  — T is integer, phase ∈ {solid, liquid}
+        pattern = re.compile(r'^(\d+)k%s_(solid|liquid)$' % self._tag)
+        gens = []
+        for name in sorted(os.listdir(self.npt_dir)):
+            m = pattern.match(name)
+            if not m:
+                continue
+            work_path = os.path.join(self.npt_dir, name)
+            if not os.path.exists(os.path.join(work_path, 'run.in')):
+                continue
+            T, phase = int(m.group(1)), m.group(2)
+            natoms = _parse_natoms_from_run_in(
+                os.path.join(work_path, 'run.in'))
+            gens.append(_NptDirStub(work_path, T, phase, natoms=natoms))
+        return gens
 
     # ---- Phase 3: NVT trajectory ------------------------------------------
 
@@ -686,11 +904,13 @@ class EOSCalculator(ABC):
                           supercell=(5, 5, 5),
                           liquid_superheat=1.9,
                           equil_steps=100000, dump_freq=10,
-                          dt=0.001, pressure=0.0001):
+                          dt=0.001, pressure=0.0001, seed=None):
         """Generate NVT trajectory LAMMPS inputs."""
         Tm = int(self._get_tm_for_run())
         print(f'[{self.element}] NVT temperature         : {Tm} K')
         pot = self._find_pot()
+        model_ext = os.path.splitext(pot)[1] or '.pb'
+        model_name = f'cp{model_ext}'
 
         _nx, _ny, _nz = supercell
 
@@ -699,7 +919,8 @@ class EOSCalculator(ABC):
             equilibrate_step=equil_steps,
             dump_freq=dump_freq,
             nx=_nx, ny=_ny,
-            nz=_nz)
+            nz=_nz,
+            model_name=model_name)
 
         self._traj_gens = []
         for phase in phases:
@@ -713,7 +934,8 @@ class EOSCalculator(ABC):
             os.makedirs(work_dir, exist_ok=True)
             gen = self._build_gen(work_dir, template)
             gen.get_files(poscar_path=poscar, pot_path=pot)
-            params = dict(base, temperature=Tm, phase=phase)
+            params = dict(base, temperature=Tm, phase=phase,
+                          seed=self._derive_seed(Tm, phase, seed))
             if phase == 'liquid':
                 params['high_temperature'] = int(
                     liquid_superheat * Tm)
@@ -889,3 +1111,55 @@ def run_eos_all(specs, work_root, **kwargs):
         except Exception as e:
             results[spec] = str(e)
     return results
+
+
+class _NptDirStub:
+    """Minimal stand-in for a LAMMPSGenerator, used when re-discovering
+    NPT job directories from disk (see :meth:`EOSCalculator.analyze_npt`
+    with ``reload=True``).
+
+    Exposes just the two attributes that downstream code reads:
+    ``work_path`` and ``params`` (a dict with at least ``temperature``
+    and ``phase``).
+    """
+
+    def __init__(self, work_path, temperature, phase, natoms=None):
+        self.work_path = work_path
+        self.params = {'temperature': temperature, 'phase': phase,
+                       'natoms': natoms}
+
+
+def _parse_natoms_from_run_in(run_in_path):
+    """Read ``natoms`` from a LAMMPS ``run.in`` produced by the NPT
+    templates.
+
+    The templates write two lines we can use::
+
+        read_data       confs.data          # 32 atoms (in the data file)
+        replicate       7 7 7              # → 32 * 7*7*7
+
+    We read ``confs.data`` for the unit-cell atom count and multiply by
+    the three integers following ``replicate``.  Returns ``None`` if
+    either piece is missing (so downstream normalisation is skipped
+    gracefully).
+    """
+    import re
+    try:
+        with open(run_in_path) as f:
+            content = f.read()
+    except OSError:
+        return None
+    m = re.search(r'^replicate\s+(\d+)\s+(\d+)\s+(\d+)', content, re.M)
+    if not m:
+        return None
+    nx, ny, nz = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    # confs.data is in the same directory as run.in
+    confs_path = os.path.join(os.path.dirname(run_in_path), 'confs.data')
+    if not os.path.exists(confs_path):
+        return None
+    try:
+        atoms = ase.io.read(confs_path, format='lammps-data')
+        natoms_uc = len(atoms)
+    except Exception:
+        return None
+    return natoms_uc * nx * ny * nz

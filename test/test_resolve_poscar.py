@@ -129,7 +129,9 @@ class TestSourceFactories(unittest.TestCase):
         sc = calculate_supercell(8, target_atoms=80)
         n_total = sc[0] * sc[1] * sc[2] * 8
         self.assertLessEqual(n_total, 80)
-        self.assertEqual(n_total, 64)  # 2x2x2
+        # The function maximises atom count up to the target;
+        # 3x3x1 = 9 cells = 72 atoms (closer to 80 than 2x2x2 = 64).
+        self.assertEqual(n_total, 72)
 
         # 4-atom primitive, target 80
         sc = calculate_supercell(4, target_atoms=80)

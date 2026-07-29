@@ -1,0 +1,547 @@
+{
+  "matched": [
+    "Fe-bcc-alpha",
+    "Fe-fcc-gamma",
+    "Fe-bcc-delta",
+    "Fe-hcp-epsilon",
+    "Ca-fcc",
+    "Ca-bcc",
+    "Ni-fcc",
+    "C-bc8",
+    "Al-fcc",
+    "Al-hcp",
+    "He-hcp",
+    "Na-bcc",
+    "Na-fcc",
+    "P-A7",
+    "P-Cmcm",
+    "S-alpha",
+    "S-beta",
+    "K-bcc",
+    "K-fcc",
+    "Ti-hcp-alpha",
+    "Ti-bcc-beta",
+    "Mg-bcc",
+    "Si-beta-sn",
+    "MgO-B1",
+    "MgO-B2",
+    "SiO2-stishovite",
+    "SiO2-pyrite",
+    "MgSiO3-akimotoite",
+    "MgSiO3-bridgmanite",
+    "MgSiO3-postperovskite",
+    "Mg2SiO4-forsterite",
+    "Mg2SiO4-ringwoodite",
+    "Mg2Si-antifluorite",
+    "Mg2Si-hcp",
+    "MgSi2-Imma",
+    "MgO2-pyrite",
+    "SiO-zincblende",
+    "Mg9Si5-P63m",
+    "MgSi2O5-P21c",
+    "Mg3Si2O9-P31m",
+    "Mg3Si2O9-P63cm"
+  ],
+  "multiple_candidates": {
+    "C-graphite": [
+      {
+        "uuid": "d5920186-9f7b-4fb4-92bb-aa40d6b28592",
+        "mc3d_id": "mc3d-27634",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -246.48115,
+        "phase_type": "theoretical"
+      },
+      {
+        "uuid": "b2af5e64-1a6a-495f-8385-8a2f439feffd",
+        "mc3d_id": "mc3d-24618",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -246.481075,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "88783497-f56a-4963-b8ec-9ca0f775343f",
+        "mc3d_id": "mc3d-2863",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -246.452975,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "e29ca1fa-76e6-481b-b662-440bec03cde1",
+        "mc3d_id": "mc3d-38703",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -246.451625,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "0b01486b-dfcd-4d57-b8fb-40e9e8d433d4",
+        "mc3d_id": "mc3d-27952",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -246.4485625,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "e8c93784-8171-4cf4-91c6-3d12d36ef0ff",
+        "mc3d_id": "mc3d-9803",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -246.4332,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "f975f8fe-08aa-4136-a964-b15e283a0727",
+        "mc3d_id": "mc3d-13867",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -242.61075,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "32ca2a30-d02b-4907-8b29-2a17ec1c8a1e",
+        "mc3d_id": "mc3d-6516",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -238.20135,
+        "phase_type": "ambient"
+      }
+    ],
+    "C-diamond": [
+      {
+        "uuid": "f23238bb-5e3e-4beb-9452-7d014e616604",
+        "mc3d_id": "mc3d-73159",
+        "sg": 227,
+        "spg_intl": "Fd-3m",
+        "energy_per_atom": -246.457,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "60b7561b-ff0c-4476-99c3-0577a3d3d550",
+        "mc3d_id": "mc3d-2177",
+        "sg": 227,
+        "spg_intl": "Fd-3m",
+        "energy_per_atom": -243.652225,
+        "phase_type": "ambient"
+      }
+    ],
+    "Ti-hp": [
+      {
+        "uuid": "505dd835-ccd2-483e-b93e-70b600118d37",
+        "mc3d_id": "mc3d-29736",
+        "sg": 191,
+        "spg_intl": "P6/mmm",
+        "energy_per_atom": -1621.0662,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "103e9157-7c8d-4b7c-aab1-d012622e301f",
+        "mc3d_id": "mc3d-8175",
+        "sg": 191,
+        "spg_intl": "P6/mmm",
+        "energy_per_atom": -1619.5576,
+        "phase_type": "ambient"
+      }
+    ],
+    "Si-diamond": [
+      {
+        "uuid": "a1dd2241-f548-4703-9ff1-c7c1c61edf26",
+        "mc3d_id": "mc3d-42058",
+        "sg": 227,
+        "spg_intl": "Fd-3m",
+        "energy_per_atom": -154.2722,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "d0d24a0e-a937-43d1-9674-78370a482b0f",
+        "mc3d_id": "mc3d-76",
+        "sg": 227,
+        "spg_intl": "Fd-3m",
+        "energy_per_atom": -153.93221764705882,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "f4dcc7b5-1e0e-4b1f-a090-2aa269b42adb",
+        "mc3d_id": "mc3d-59302",
+        "sg": 227,
+        "spg_intl": "Fd-3m",
+        "energy_per_atom": -153.655575,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "be25d89e-be90-4a40-a2c0-315f45cc5501",
+        "mc3d_id": "mc3d-19925",
+        "sg": 227,
+        "spg_intl": "Fd-3m",
+        "energy_per_atom": -153.0207888888889,
+        "phase_type": "ambient"
+      }
+    ],
+    "Si-simple-hex": [
+      {
+        "uuid": "e0680921-2121-47f5-b5e3-c536835594d8",
+        "mc3d_id": "mc3d-67106",
+        "sg": 191,
+        "spg_intl": "P6/mmm",
+        "energy_per_atom": -154.0771,
+        "phase_type": "high_pressure"
+      },
+      {
+        "uuid": "11b83140-acfb-4bd3-8e2d-82a6aa74ec30",
+        "mc3d_id": "mc3d-78091",
+        "sg": 191,
+        "spg_intl": "P6/mmm",
+        "energy_per_atom": -153.9225,
+        "phase_type": "ambient"
+      }
+    ],
+    "Si-Cmcm": [
+      {
+        "uuid": "20d337aa-073f-4f5b-82de-424095771c23",
+        "mc3d_id": "mc3d-32652",
+        "sg": 63,
+        "spg_intl": "Cmcm",
+        "energy_per_atom": -154.262975,
+        "phase_type": "theoretical"
+      },
+      {
+        "uuid": "5898bf3f-f4e6-469b-8ed2-2a65a504eb28",
+        "mc3d_id": "mc3d-21643",
+        "sg": 63,
+        "spg_intl": "Cmcm",
+        "energy_per_atom": -154.1801,
+        "phase_type": "theoretical"
+      },
+      {
+        "uuid": "99593aad-3582-492d-8926-3290b34afe66",
+        "mc3d_id": "mc3d-47639",
+        "sg": 63,
+        "spg_intl": "Cmcm",
+        "energy_per_atom": -154.179675,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "0c44d98d-9add-4e00-b796-17b5a8c660cd",
+        "mc3d_id": "mc3d-44720",
+        "sg": 63,
+        "spg_intl": "Cmcm",
+        "energy_per_atom": -154.16057608695652,
+        "phase_type": "theoretical"
+      }
+    ],
+    "Si-hcp": [
+      {
+        "uuid": "fdab2b10-3d29-474b-924a-18cdea439fce",
+        "mc3d_id": "mc3d-34846",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -154.262975,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "06d4ccf1-b58f-4fed-a323-22cef13dc0ad",
+        "mc3d_id": "mc3d-43292",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -154.20160735294118,
+        "phase_type": "theoretical"
+      },
+      {
+        "uuid": "d9c796ce-d0ec-41cf-874d-9c607376a598",
+        "mc3d_id": "mc3d-64972",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -154.02689166666667,
+        "phase_type": "theoretical"
+      },
+      {
+        "uuid": "c7ea3905-8661-4b02-82df-b198baf8283b",
+        "mc3d_id": "mc3d-23122",
+        "sg": 194,
+        "spg_intl": "P6_3/mmc",
+        "energy_per_atom": -153.8972,
+        "phase_type": "high_pressure"
+      }
+    ],
+    "SiO2-quartz": [
+      {
+        "uuid": "ef30bff0-42b6-4fed-8406-c28904fa3e9a",
+        "mc3d_id": "mc3d-81079",
+        "sg": 154,
+        "spg_intl": "P3_221",
+        "energy_per_atom": -426.82663333333335,
+        "phase_type": "high_temperature"
+      },
+      {
+        "uuid": "7fbf47d6-110b-47a9-9151-b2d71f9e15e2",
+        "mc3d_id": "mc3d-1166",
+        "sg": 154,
+        "spg_intl": "P3_221",
+        "energy_per_atom": -426.30575555555555,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "aa4c4666-d816-4f83-ad00-7f19ba4aab41",
+        "mc3d_id": "mc3d-44889",
+        "sg": 154,
+        "spg_intl": "P3_221",
+        "energy_per_atom": -426.30575555555555,
+        "phase_type": "high_temperature"
+      },
+      {
+        "uuid": "313db709-bab1-4298-9a7e-cdcd832b9412",
+        "mc3d_id": "mc3d-6352",
+        "sg": 154,
+        "spg_intl": "P3_221",
+        "energy_per_atom": -426.30575555555555,
+        "phase_type": "high_temperature"
+      },
+      {
+        "uuid": "f7689a13-bc69-4e36-b041-fb59c0b08c25",
+        "mc3d_id": "mc3d-81082",
+        "sg": 154,
+        "spg_intl": "P3_221",
+        "energy_per_atom": -426.30575555555555,
+        "phase_type": "high_temperature"
+      },
+      {
+        "uuid": "3c39d12b-7c7d-4d0e-adf3-735d7bd9bdb9",
+        "mc3d_id": "mc3d-81084",
+        "sg": 154,
+        "spg_intl": "P3_221",
+        "energy_per_atom": -426.30575555555555,
+        "phase_type": "high_temperature"
+      },
+      {
+        "uuid": "fa50e327-b7e0-47c1-aaca-ee213ef6a855",
+        "mc3d_id": "mc3d-83983",
+        "sg": 154,
+        "spg_intl": "P3_221",
+        "energy_per_atom": -426.29982222222225,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "697faaa7-34a7-4320-8742-aa5d0c43b539",
+        "mc3d_id": "mc3d-39110",
+        "sg": 154,
+        "spg_intl": "P3_221",
+        "energy_per_atom": -426.2997222222223,
+        "phase_type": "ambient"
+      }
+    ],
+    "SiO2-coesite": [
+      {
+        "uuid": "9a3b315f-9241-47f6-88b8-734d492321da",
+        "mc3d_id": "mc3d-72598",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -426.30476666666664,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "39096173-bc11-40b4-87c8-37f93315386b",
+        "mc3d_id": "mc3d-43168",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -426.3047388888889,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "4c1a1dc7-7ae3-4a15-9ab7-7379e92acaa1",
+        "mc3d_id": "mc3d-48708",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -426.30007500000005,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "b54d4a3c-bb6e-415e-88e9-024d060f42fa",
+        "mc3d_id": "mc3d-2498",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -426.28782083333334,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "668b0e2c-353d-4160-832a-f75bbe365178",
+        "mc3d_id": "mc3d-14174",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -426.18086111111114,
+        "phase_type": "theoretical"
+      },
+      {
+        "uuid": "eadaeb56-ea94-42ed-8038-f29b28c9bc81",
+        "mc3d_id": "mc3d-20020",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -425.78275833333333,
+        "phase_type": "theoretical"
+      }
+    ],
+    "SiO2-alphaPbO2": [
+      {
+        "uuid": "33b3a016-a71e-4f5a-991a-d523372ac3b1",
+        "mc3d_id": "mc3d-37307",
+        "sg": 60,
+        "spg_intl": "Pbcn",
+        "energy_per_atom": -426.192375,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "ec850c4d-65bb-47f0-a0a5-4b3bb58f4c01",
+        "mc3d_id": "mc3d-83910",
+        "sg": 60,
+        "spg_intl": "Pbcn",
+        "energy_per_atom": -426.192375,
+        "phase_type": "ambient"
+      }
+    ],
+    "MgSiO3-enstatite": [
+      {
+        "uuid": "f503f564-37c3-4f9c-8f7c-23d1a0f6a355",
+        "mc3d_id": "mc3d-61312",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -457.596065,
+        "phase_type": "theoretical"
+      },
+      {
+        "uuid": "1be28aef-fdc5-4f31-a16f-0e449c2f2881",
+        "mc3d_id": "mc3d-10219",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -457.59586499999995,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "603dd616-fa87-40f2-a9dd-5c5692c47a35",
+        "mc3d_id": "mc3d-84681",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -457.59526999999997,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "f75238b3-0dd0-4160-b859-3632475c283e",
+        "mc3d_id": "mc3d-18961",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -457.594925,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "eb92946c-37c2-451d-9170-bdc9963eb889",
+        "mc3d_id": "mc3d-29734",
+        "sg": 15,
+        "spg_intl": "C2/c",
+        "energy_per_atom": -457.594145,
+        "phase_type": "theoretical"
+      }
+    ],
+    "Mg2SiO4-wadsleyite": [
+      {
+        "uuid": "db6b787e-3cbd-4162-9e72-08bb70862b79",
+        "mc3d_id": "mc3d-22531",
+        "sg": 74,
+        "spg_intl": "Imma",
+        "energy_per_atom": -470.97325,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "30b2bfd9-8066-40c1-b860-4daba0059135",
+        "mc3d_id": "mc3d-10689",
+        "sg": 74,
+        "spg_intl": "Imma",
+        "energy_per_atom": -470.6702392857143,
+        "phase_type": "theoretical"
+      }
+    ],
+    "Mg2Si-Pnma": [
+      {
+        "uuid": "7184feb2-8c36-4b0f-a0b5-58283d7c87bf",
+        "mc3d_id": "mc3d-45512",
+        "sg": 62,
+        "spg_intl": "Pnma",
+        "energy_per_atom": -348.32417499999997,
+        "phase_type": "high_pressure"
+      },
+      {
+        "uuid": "d76a200d-c29c-4503-b756-a58cb04921ab",
+        "mc3d_id": "mc3d-63975",
+        "sg": 62,
+        "spg_intl": "Pnma",
+        "energy_per_atom": -348.32417499999997,
+        "phase_type": "theoretical"
+      }
+    ],
+    "Mg4Si7-C2m": [
+      {
+        "uuid": "751a0e76-5847-4f40-a666-ca1d981d79f5",
+        "mc3d_id": "mc3d-24629",
+        "sg": 12,
+        "spg_intl": "C2/m",
+        "energy_per_atom": -259.99561818181814,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "b3bbd803-7d79-4750-9fe4-beab1bbe2b85",
+        "mc3d_id": "mc3d-76285",
+        "sg": 12,
+        "spg_intl": "C2/m",
+        "energy_per_atom": -259.99561818181814,
+        "phase_type": "ambient"
+      }
+    ],
+    "Mg5Si6-C2m": [
+      {
+        "uuid": "7b1a827a-293e-4508-a33c-de4fa4e1a0e3",
+        "mc3d_id": "mc3d-63829",
+        "sg": 12,
+        "spg_intl": "C2/m",
+        "energy_per_atom": -286.5105454545455,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "da837d9e-4290-497a-95f7-f3a3f9a9b69d",
+        "mc3d_id": "mc3d-53500",
+        "sg": 12,
+        "spg_intl": "C2/m",
+        "energy_per_atom": -286.41493636363634,
+        "phase_type": "theoretical"
+      }
+    ],
+    "Mg5Si6-Cm": [
+      {
+        "uuid": "9d1c436d-ccc0-4e6a-9617-fefef0e9fdcd",
+        "mc3d_id": "mc3d-86335",
+        "sg": 8,
+        "spg_intl": "Cm",
+        "energy_per_atom": -286.5105454545455,
+        "phase_type": "ambient"
+      },
+      {
+        "uuid": "a26c944a-3aa9-44e7-8ade-7a098730a4ae",
+        "mc3d_id": "mc3d-86336",
+        "sg": 8,
+        "spg_intl": "Cm",
+        "energy_per_atom": -286.5105454545455,
+        "phase_type": "ambient"
+      }
+    ]
+  },
+  "no_match": [
+    "Na/Na-cI16: sg=206 not in MC3D (marked structure_source='manual')",
+    "P/P-black: sg=19 not in MC3D (marked structure_source='manual')"
+  ],
+  "skipped": [],
+  "api_errors": [
+    "H/H-hcp: MC3D query failed (No MC3D entries for formula 'H' in method=pbesol-v2)",
+    "N/N-cg: MC3D query failed (No MC3D entries for formula 'N' in method=pbesol-v2)",
+    "O/O-delta: MC3D query failed (No MC3D entries for formula 'O' in method=pbesol-v2)",
+    "O/O-epsilon: MC3D query failed (cached None)",
+    "O/O-zeta: MC3D query failed (cached None)"
+  ]
+}

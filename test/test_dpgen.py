@@ -201,5 +201,128 @@ class TestDpgenJobsLogic(unittest.TestCase):
             self.assertEqual(j['ensemble'], 'nvt')
 
 
+class TestGeneratePressGridForPhase(unittest.TestCase):
+    """Test the per-phase press grid generator (D1)."""
+
+    def test_seg_without_p_explore_returns_none(self):
+        """Legacy segs (no P_explore) → None → caller falls back to global grid."""
+        from extrempy.lazy.dpgen import _generate_press_grid_for_phase
+        seg = {'label': 'Ti-HCP', 'T_core': (300, 1155),
+               'T_explore': (300, 1386)}
+        self.assertIsNone(_generate_press_grid_for_phase(seg))
+
+    def test_seg_with_p_explore_returns_log_spaced(self):
+        from extrempy.lazy.dpgen import _generate_press_grid_for_phase
+        seg = {'label': 'MgSiO3-bridgmanite',
+               'P_explore': (15, 140)}
+        grid = _generate_press_grid_for_phase(seg)
+        self.assertIsNotNone(grid)
+        self.assertGreaterEqual(len(grid), 5)
+        # All values in bar
+        for p in grid:
+            self.assertIsInstance(p, int)
+        # Monotonic increasing
+        for i in range(len(grid) - 1):
+            self.assertLess(grid[i], grid[i+1])
+
+    def test_p_explore_units_gpa_to_bar(self):
+        """P_explore in GPa → output in bar (1 GPa = 1e4 bar)."""
+        from extrempy.lazy.dpgen import _generate_press_grid_for_phase
+        seg = {'label': 'test', 'P_explore': (10, 100)}
+        grid = _generate_press_grid_for_phase(seg, n_points=3)
+        self.assertEqual(len(grid), 3)
+        self.assertAlmostEqual(grid[0], 10 * 1e4, delta=1)
+        self.assertAlmostEqual(grid[-1], 100 * 1e4, delta=1)
+
+    def test_p_lo_zero_floor(self):
+        """P_lo=0 should be floored to 0.1 GPa to avoid log10(0)."""
+        from extrempy.lazy.dpgen import _generate_press_grid_for_phase
+        seg = {'label': 'test', 'P_explore': (0, 100)}
+        grid = _generate_press_grid_for_phase(seg, n_points=3)
+        self.assertIsNotNone(grid)
+        self.assertGreater(grid[0], 0)
+
+    def test_n_points_adaptive(self):
+        """When n_points=None, auto-adapt to pressure span."""
+        from extrempy.lazy.dpgen import _generate_press_grid_for_phase
+        # 0.1 to 400 GPa → log10(4000) ≈ 3.6 → ~10 points
+        seg = {'label': 'wide', 'P_explore': (0.1, 400)}
+        grid = _generate_press_grid_for_phase(seg)
+        self.assertIsNotNone(grid)
+        self.assertGreaterEqual(len(grid), 5)
+        # Wider span → more points than narrow span
+        narrow_seg = {'label': 'narrow', 'P_explore': (90, 100)}
+        narrow_grid = _generate_press_grid_for_phase(narrow_seg)
+        self.assertGreaterEqual(len(grid), len(narrow_grid))
+
+
+class TestPerPhasePressGridInSegments(unittest.TestCase):
+    """Test that _set_model_devi_jobs_from_segments uses per-phase press grid (D2)."""
+
+    def setUp(self):
+        # 2D segs (new: with P_explore) — as produced by make_extreme_segments
+        self.segs_2d = [
+            {'label': 'MgO-B1', 'T_explore': (300, 5000),
+             'P_explore': (0, 400)},
+            {'label': 'MgO-B2', 'T_explore': (300, 5000),
+             'P_explore': (380, 1500)},
+        ]
+        # 1D segs (legacy: no P_explore) — as produced by get_phase_segments
+        self.segs_1d = [
+            {'label': 'Ti-HCP', 'structure': 'hcp',
+             'T_core': (300, 1155), 'T_explore': (300, 1386)},
+            {'label': 'Ti-BCC', 'structure': 'bcc',
+             'T_core': (1155, 1941), 'T_explore': (924, 2329)},
+        ]
+        class FakeGen:
+            jparam = {"model_devi_jobs": []}
+        self.gen = FakeGen()
+
+    def _run(self, segs, **kw):
+        from extrempy.lazy.dpgen import DPGENGenerator
+        method = DPGENGenerator._set_model_devi_jobs_from_segments
+        defaults = dict(nsteps_per_phase=2,
+                        init_steps=[1000, 2000],
+                        press_grid=[1, 10, 100, 1000, 10000],
+                        trj_freq=20, numb_frame_per_iter_per_PT=5,
+                        ensemble='npt')
+        defaults.update(kw)
+        method(self.gen, segs, **defaults)
+        return self.gen.jparam['model_devi_jobs']
+
+    def test_legacy_segs_use_global_press_grid(self):
+        """1D segs (no P_explore) → use global press_grid (backward compat)."""
+        jobs = self._run(self.segs_1d)
+        for j in jobs:
+            self.assertEqual(j['press'], [1, 10, 100, 1000, 10000])
+
+    def test_2d_segs_use_per_phase_press_grid(self):
+        """2D segs (with P_explore) → use per-phase log-spaced press grid."""
+        jobs = self._run(self.segs_2d)
+        # All jobs should have non-default press grids
+        for j in jobs:
+            self.assertNotEqual(j['press'], [1, 10, 100, 1000, 10000])
+            # Pressures should be in bar, > 0
+            for p in j['press']:
+                self.assertGreater(p, 0)
+
+    def test_2d_segs_different_press_per_phase(self):
+        """B1 and B2 have different P_explore → different press grids."""
+        jobs = self._run(self.segs_2d)
+        b1_jobs = [j for j in jobs if j['sys_idx'] == [0]]
+        b2_jobs = [j for j in jobs if j['sys_idx'] == [1]]
+        # B1 (0-400 GPa) should have lower pressures than B2 (380-1500 GPa)
+        self.assertLess(max(b1_jobs[0]['press']), max(b2_jobs[0]['press']))
+
+    def test_mixed_segs(self):
+        """Mix of 1D and 2D segs → each uses appropriate grid."""
+        mixed = [self.segs_1d[0], self.segs_2d[0]]
+        jobs = self._run(mixed)
+        # Job 0 (1D seg) → global grid
+        self.assertEqual(jobs[0]['press'], [1, 10, 100, 1000, 10000])
+        # Job 2 (2D seg, sys_idx=1) → per-phase grid
+        self.assertNotEqual(jobs[2]['press'], [1, 10, 100, 1000, 10000])
+
+
 if __name__ == '__main__':
     unittest.main()

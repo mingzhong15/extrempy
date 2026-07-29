@@ -52,7 +52,7 @@ variable        ENTHALPY equal enthalpy
 
 variable        y equal ${T}
 
-velocity        all create $y 8341 dist gaussian rot yes
+velocity        all create $y {{ seed | default('8341') }} dist gaussian rot yes
 fix             1 all npt temp ${T} ${T} 0.1 aniso $p $p 0.5
 run             20000
 unfix           1

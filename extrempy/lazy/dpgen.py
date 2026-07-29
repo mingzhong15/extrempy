@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import os
 import glob
@@ -287,10 +288,23 @@ class DPGENGenerator(InputGenerator):
                                            nsteps_per_phase=5,
                                            init_steps=None,
                                            press_grid=None,
+                                           n_press_per_phase=None,
                                            trj_freq=20,
                                            numb_frame_per_iter_per_PT=5,
                                            ensemble='npt',
                                            sub_indices=None):
+        """Build model_devi_jobs from a list of phase segments.
+
+        Per-phase pressure grid
+        -----------------------
+        When a seg contains ``P_explore`` (a ``(p_lo_GPa, p_hi_GPa)`` tuple,
+        as produced by :func:`extrempy.lazy.minerals.make_extreme_segments`),
+        a log-spaced pressure grid is generated within that range via
+        :func:`_generate_press_grid_for_phase` and overrides the global
+        ``press_grid`` for that seg.  Segs without ``P_explore`` fall back
+        to the global ``press_grid`` (backward-compatible with
+        :class:`ElementDPBuilder` segs).
+        """
         if init_steps is None:
             init_steps = [1000, 2000, 4000, 8000, 16000]
         if press_grid is None:
@@ -304,10 +318,17 @@ class DPGENGenerator(InputGenerator):
                 continue
             T_explore = seg['T_explore']
             T_list = _generate_temp_list(T_explore[0], T_explore[1])
-            min_n_p_t = min(min_n_p_t, len(T_list) * len(press_grid) * 1)
+            # Per-phase press grid (new): fall back to global if seg has no P_explore
+            seg_press = _generate_press_grid_for_phase(
+                seg, n_points=n_press_per_phase)
+            if seg_press is None:
+                seg_press = press_grid
+            min_n_p_t = min(min_n_p_t, len(T_list) * len(seg_press) * 1)
+            p_src = ('P_explore' if 'P_explore' in seg else 'global')
             print(f"\nPhase {seg['label']}: T_explore "
                   f"{T_explore[0]:.0f}-{T_explore[1]:.0f}K, "
-                  f"{len(T_list)} T points")
+                  f"{len(T_list)} T points; "
+                  f"P[{len(seg_press)}] from {p_src}")
             for iter_idx in range(nsteps_per_phase):
                 if isinstance(init_steps, (list, tuple)):
                     if real_idx < len(init_steps):
@@ -320,17 +341,17 @@ class DPGENGenerator(InputGenerator):
                 new_job = {
                     "sys_idx": [sys_idx],
                     "temps": T_list,
-                    "press": press_grid,
+                    "press": seg_press,
                     "ensemble": ensemble,
                     "trj_freq": trj_freq,
                     "nsteps": nsteps,
                     "_idx": real_idx,
                 }
-                n_p_t = len(T_list) * len(press_grid) * numb_frame_per_iter_per_PT
+                n_p_t = len(T_list) * len(seg_press) * numb_frame_per_iter_per_PT
                 max_n_p_t = max(max_n_p_t, n_p_t)
                 print(f"  Iter. {real_idx} (phase {sys_idx}, "
                       f"label={seg['label']}): "
-                      f"nsteps={nsteps}, T[{len(T_list)}]xP[{len(press_grid)}]")
+                      f"nsteps={nsteps}, T[{len(T_list)}]xP[{len(seg_press)}]")
                 self.jparam["model_devi_jobs"].append(new_job)
                 real_idx += 1
         self.jparam["fp_task_max"] = max_n_p_t
@@ -483,3 +504,37 @@ def _generate_pres_list(xmin, xmax, delta_min=1, n_split=5, Nx_max=100):
                 break
             
     return x_list
+
+
+def _generate_press_grid_for_phase(seg, *, n_points=None):
+    """Generate a log-spaced pressure grid (in bar) from a seg's P_explore.
+
+    The seg is expected to carry ``P_explore`` as a ``(p_lo_GPa, p_hi_GPa)``
+    tuple (as produced by
+    :func:`extrempy.lazy.minerals.make_extreme_segments`).
+    Pressure values are converted from GPa to bar (1 GPa = 1e4 bar)
+    for DPGEN convention.
+
+    When ``n_points`` is None, the count is auto-adapted to the pressure
+    span: ``max(5, int(log10(P_hi/P_lo) * 3))``.  This gives ~3 points
+    per decade of pressure range, suitable for the 0-400 GPa deep-Earth
+    span (up to ~6 decades -> ~18 points max).
+
+    Returns
+    -------
+    list[int] or None
+        Pressure grid in bar.  ``None`` if the seg has no ``P_explore``
+        key (legacy 1D segs); caller should fall back to a global grid.
+    """
+    P_explore = seg.get('P_explore')
+    if P_explore is None:
+        return None
+    p_lo, p_hi = P_explore  # GPa
+    if p_lo <= 0:
+        p_lo = 0.1  # avoid log10(0); 0.1 GPa = 1 kbar floor
+    if p_hi <= p_lo:
+        return [int(p_lo * 1e4)]
+    if n_points is None:
+        n_points = max(5, int(math.log10(p_hi / p_lo) * 3))
+    grid_gpa = np.logspace(np.log10(p_lo), np.log10(p_hi), n_points)
+    return [int(round(p * 1e4)) for p in grid_gpa]

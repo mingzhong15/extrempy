@@ -241,7 +241,10 @@ def process_npt_directories(base_dir, element, phases=None, skip_unstable=True,
 
     for phase in phases:
         dirs = []
-        dir_pattern = os.path.join(base_dir, f'{element}_*k_npt_{phase}')
+        # Match the directory layout produced by EOSCalculator.generate_npt:
+        #   {T}k{tag}_{phase}/   (tag may be empty, e.g. '_hcp' or '')
+        # The previous pattern ``{element}_*k_npt_{phase}`` never matched.
+        dir_pattern = os.path.join(base_dir, f'*k*_{phase}')
         found_dirs = glob.glob(dir_pattern)
         dirs.extend(found_dirs)
         dirs = sorted(list(set(dirs)))
@@ -437,3 +440,110 @@ MELT_LIST = {}
 for phase, phase_data in MELT_DATA.items():
     for elem, data in phase_data.items():
         MELT_LIST[elem] = {**data, 'phase': phase}
+
+
+# ================================================================
+#  EOS analysis — pure functions (no I/O, unit-testable)
+# ================================================================
+
+# Boltzmann constant in eV/K (matches LAMMPS `metal` units).
+KB_EV_K = 8.617333262e-5
+
+
+def extrapolate_enthalpy_to_tm(df, Tm, enthalpy_col='enthalpy[eV]_mean',
+                               natoms_col='natoms', phase_col='phase',
+                               temp_col='temperature'):
+    """Linear-extrapolate solid/liquid H-T branches to ``Tm``.
+
+    Fits a straight line to each branch's H/N vs T (skipping any points
+    whose ``natoms`` is missing so the per-atom normalisation is well
+    defined), evaluates both at ``Tm``, and returns the latent heat of
+    fusion ``ΔH_f = H_liq(Tm) - H_sol(Tm)`` in eV/atom.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Output of :func:`ElementEOSCalculator.analyze_npt` — must
+        contain ``enthalpy_col``, ``natoms_col``, ``phase_col`` and
+        ``temp_col``.
+    Tm : float
+        Melting point (K) at which to evaluate the two branches.
+    enthalpy_col, natoms_col, phase_col, temp_col : str
+        Column names (allow callers to override if the thermo header
+        changes).
+
+    Returns
+    -------
+    dict
+        ``{'dH_f': float|None, 'H_solid_Tm': float|None,
+        'H_liquid_Tm': float|None, 'solid_slope': float|None,
+        'liquid_slope': float|None}``.  All entries are ``None`` when
+        one of the branches has fewer than 2 valid points.
+    """
+    import numpy as np
+
+    def _fit_branch(sub):
+        sub = sub.dropna(subset=[enthalpy_col, natoms_col, temp_col])
+        if len(sub) < 2:
+            return None, None
+        T = sub[temp_col].values.astype(float)
+        H = (sub[enthalpy_col] / sub[natoms_col]).values.astype(float)
+        # polyfit degree 1 → (slope, intercept)
+        slope, intercept = np.polyfit(T, H, 1)
+        H_at_Tm = slope * Tm + intercept
+        return H_at_Tm, slope
+
+    out = dict(dH_f=None, H_solid_Tm=None, H_liquid_Tm=None,
+              solid_slope=None, liquid_slope=None)
+
+    solid = df[df[phase_col] == 'solid']
+    liquid = df[df[phase_col] == 'liquid']
+    H_s, slope_s = _fit_branch(solid)
+    H_l, slope_l = _fit_branch(liquid)
+    out['H_solid_Tm'] = H_s
+    out['H_liquid_Tm'] = H_l
+    out['solid_slope'] = slope_s
+    out['liquid_slope'] = slope_l
+    if H_s is not None and H_l is not None:
+        out['dH_f'] = H_l - H_s
+    return out
+
+
+def fit_arrhenius(temps, diffusions):
+    """Arrhenius fit ``ln D = ln D0 − Ea / (k T)``.
+
+    Parameters
+    ----------
+    temps : array-like of float
+        Temperatures (K).
+    diffusions : array-like of float
+        Diffusion coefficients D (cm²/s), same length as ``temps``.
+        Zero or negative entries are dropped (``ln`` undefined).
+
+    Returns
+    -------
+    dict
+        ``{'Ea_eV': float, 'D0': float, 'r_squared': float}`` or all
+        ``None`` if fewer than 2 valid points remain.
+    """
+    import numpy as np
+
+    T = np.asarray(temps, dtype=float)
+    D = np.asarray(diffusions, dtype=float)
+    mask = (D > 0) & np.isfinite(T) & np.isfinite(D)
+    T, D = T[mask], D[mask]
+    if len(T) < 2:
+        return dict(Ea_eV=None, D0=None, r_squared=None)
+
+    x = 1.0 / T
+    y = np.log(D)
+    slope, intercept = np.polyfit(x, y, 1)
+    # slope = -Ea / k  →  Ea = -slope * k
+    Ea_eV = -slope * KB_EV_K
+    D0 = float(np.exp(intercept))
+
+    y_pred = slope * x + intercept
+    ss_res = np.sum((y - y_pred) ** 2)
+    ss_tot = np.sum((y - np.mean(y)) ** 2)
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    return dict(Ea_eV=float(Ea_eV), D0=D0, r_squared=float(r2))
