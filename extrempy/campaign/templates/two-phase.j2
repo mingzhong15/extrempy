@@ -26,7 +26,7 @@ variable	    p equal {{pressure | default('0.0001')}}*10000
 
 variable        t equal {{heating_step | default('10000')}}
 
-pair_style      deepmd cp.pb fparam ${T1}
+pair_style      deepmd {{ model_name | default('cp.pb') }} fparam ${T1}
 pair_coeff      * *
 
 {% for element in elements %}
@@ -65,12 +65,12 @@ compute 	    Q all orientorder/atom degrees 2 4 6 cutoff {{Q_cutoff | default('3
 # heat to T1
 variable     	y equal ${T1}
 
-velocity       	all create $y 8341 dist gaussian rot yes
+velocity       	all create $y {{ seed | default('8341') }} dist gaussian rot yes
 fix             1 all npt temp ${T1} ${T1} 0.1 aniso $p $p 0.5
 run            	10000
 unfix           1
 
-fix             CHUNK all ave/chunk 1 1 1000 cells density/mass temp c_Q[1] c_Q[2] file chunk.profile
+fix             CHUNK all ave/chunk 1 1 1000 cells density/mass temp c_Q[2] c_Q[3] file chunk.profile
 
 # RDF: record from here so the whole heating/cooling/equil window is covered
 compute         rdfbot bottom rdf 100
@@ -85,7 +85,7 @@ fix             RDFTOP top ave/time 1 1 10000 c_rdftop[*] file rdf_top.txt mode 
 #dump_modify     1 sort id
 #dump_modify     1 element {% for element in elements %}{{ element.name }} {% endfor %}
 
-fix             CHUNK all ave/chunk 1 1 1000 cells density/mass temp v_virial_atom c_Q[1] c_Q[2] file chunk.profile
+fix             CHUNK all ave/chunk 1 1 1000 cells density/mass temp v_virial_atom c_Q[2] c_Q[3] file chunk.profile
 
 fix             1 top npt temp ${T1} ${T2} 0.1 z $p $p 1
 run             $t

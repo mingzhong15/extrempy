@@ -40,7 +40,7 @@ def read_chunk_profile(path):
 
     The file contains repeated blocks, each preceded by a ``#`` header
     line listing the column names (e.g.
-    ``# Chunk Coord1 Ncount density/mass temp v_virial_atom c_Q[1] c_Q[2]``)
+    ``# Chunk Coord1 Ncount density/mass temp v_virial_atom c_Q[2] c_Q[3]``)
     and a timestep line.  This function is data-driven: it reads the
     header to build a column-name → index map, so column reordering or
     additions do not break it.
@@ -54,7 +54,7 @@ def read_chunk_profile(path):
     blocks : list[dict]
         Each dict has ``timestep`` (int or None) and ``chunks``
         (list[dict] keyed by the normalised column names —
-        ``c_Q[1]`` is mapped to ``q4``, ``c_Q[2]`` to ``q6``,
+        ``c_Q[2]`` is mapped to ``q4``, ``c_Q[3]`` to ``q6``,
         ``density/mass`` to ``density``).
         Returns ``[]`` if the file is missing or unparseable.
     """
@@ -128,8 +128,8 @@ def _normalise_header(tokens):
         'density/mass': 'density',
         'temp': 'temp',
         'v_virial_atom': 'virial',
-        'c_q[1]': 'q4',
-        'c_q[2]': 'q6',
+        'c_q[2]': 'q4',
+        'c_q[3]': 'q6',
     }
     return [mapping.get(t.lower(), t) for t in tokens]
 
